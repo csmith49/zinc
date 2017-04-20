@@ -45,8 +45,26 @@ module Zipper = struct
     let down_at (pos : int) : 'a t -> 'a t option = function
         | Z (v, ts, zs) -> if CCList.is_empty ts then None else
             let f = fun (ls, t, rs) -> match t with
-                | Leaf v' -> Some (Z (v', [], (v, ls, rs) :: zs))
-                | Node (v', ts') -> Some (Z (v', ts', (v, ls, rs) :: zs))
-            in (Utility.split_at pos ts) >>= f
+                | Leaf v' -> Z (v', [], (v, ls, rs) :: zs)
+                | Node (v', ts') -> Z (v', ts', (v, ls, rs) :: zs)
+            in f <$> (Utility.split_at pos ts)
     let down (z : 'a t) : 'a t option = down_at 0 z
+    let left : 'a t -> 'a t option = function
+        | Z (v, ts, (f, l, r) :: zs) ->
+            let r' = (make v ts) :: r in
+            let f = fun (ls', l') -> match l' with
+                | Leaf x' -> Z (x', [], (f, ls', r') :: zs)
+                | Node (f', ts') -> Z (f', ts', (f, ls', r') :: zs)
+            in f <$> (Utility.split_last l)
+        | _ -> None
+    let right : 'a t -> 'a t option = function
+        | Z (v, ts, (f, l, r) :: zs) ->
+            let l' = l @ [make v ts] in
+            let f = fun (r', rs') -> match r' with
+                | Leaf x' -> Z (x', [], (f, l', rs') :: zs)
+                | Node (f', ts') -> Z (f', ts', (f, l', rs') :: zs)
+            in f <$> (Utility.split_first r)
+        | _ -> None
+    (* and some more useful movement operators *)
+    let rec next (z : 'a t) : 'a t option = (right z) <+> (up z) >>= next
 end
