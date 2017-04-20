@@ -1,5 +1,14 @@
+open CCOpt.Infix
+
 (* split a list into the elements before, at and after an index *)
-let split_at (pos : int) (ls : 'a list) : ('a list * 'a * 'a list) option = None
+let rec split_at (pos : int) (ls : 'a list) : ('a list * 'a * 'a list) option = match ls with
+    | [] -> None
+    | x :: xs ->
+        if pos = 0 then
+            Some ([], x, xs)
+        else
+            let f = fun (l, p, r) -> x :: l, p, r in
+                f <$> (split_at (pos - 1) xs)
 
 (* split a list into the n - 1 elements and the last element *)
 let rec split_last (ls : 'a list) : ('a list * 'a) option = match ls with

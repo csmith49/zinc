@@ -67,4 +67,5 @@ module Zipper = struct
         | _ -> None
     (* and some more useful movement operators *)
     let rec next (z : 'a t) : 'a t option = (right z) <+> (up z) >>= next
+    let preorder (z : 'a t) : 'a t option = (down z) <+> (next z)
 end
