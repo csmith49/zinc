@@ -1,5 +1,3 @@
-open CCOpt.Infix
-
 (* simple rose trees represent everything we might need - parameterized by node value *)
 type 'a tree =
     | Leaf of 'a
@@ -10,8 +8,15 @@ let make (v : 'a) (ts : 'a tree list) : 'a tree =
         Leaf v
     else
         Node (v, ts)
+(* an instance of a functor *)
+let rec fmap (f : 'a -> 'b) : 'a tree -> 'b tree = function
+    | Leaf  v -> Leaf (f v)
+    | Node (v, ts) -> Node (f v, CCList.map (fmap f) ts)
+let (<$>) = fmap
 
 module Zipper = struct
+    open CCOpt.Infix
+    open CCFun
     (* zipper type for rose trees is actually rather complex, but we'll manage somehow *)
     type 'a t = Z of 'a * 'a tree list * ('a * ('a tree list) * ('a tree list)) list
     (* some setters and getters and whatnot *)
@@ -68,4 +73,6 @@ module Zipper = struct
     (* and some more useful movement operators *)
     let rec next (z : 'a t) : 'a t option = (right z) <+> (up z) >>= next
     let preorder (z : 'a t) : 'a t option = (down z) <+> (next z)
+    let rec preorder_until (p : 'a -> bool) (z : 'a t) : 'a t option =
+        (CCOpt.if_ (p % get) z) <+> (preorder z) >>= (preorder_until p)
 end
