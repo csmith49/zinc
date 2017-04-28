@@ -20,3 +20,9 @@ let rec split_last (ls : 'a list) : ('a list * 'a) option = match ls with
 let split_first (ls : 'a list) : ('a * 'a list) option = match ls with
     | [] -> None
     | x :: xs -> Some (x, xs)
+
+(* a simpler fold, that doesn't apply when there's only one element in the list *)
+let rec fold (f : 'a -> 'a -> 'a) (ls : 'a list) : 'a = match ls with
+    | [] -> failwith "nothing to merge"
+    | x :: [] -> x
+    | x :: xs -> f x (fold f xs)
