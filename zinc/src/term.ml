@@ -1,78 +1,64 @@
-(* simple rose trees represent everything we might need - parameterized by node value *)
-type 'a tree =
-    | Leaf of 'a
-    | Node of 'a * 'a tree list
-(* maybe we encapsulate constructors -- really all that matters is the number of children *)
-let make (v : 'a) (ts : 'a tree list) : 'a tree =
-    if CCList.is_empty ts then
-        Leaf v
-    else
-        Node (v, ts)
-(* an instance of a functor *)
-let rec fmap (f : 'a -> 'b) : 'a tree -> 'b tree = function
-    | Leaf  v -> Leaf (f v)
-    | Node (v, ts) -> Node (f v, CCList.map (fmap f) ts)
+(* updated versions - we use applicative style to model our terms, with debruijn indices *)
+type 'a t =
+  | Abs of 'a t
+  | App of 'a t * 'a t
+  | Symbol of 'a
+type 'a term = 'a t
+
+(* our terms are instances of functors *)
+let rec fmap (f : 'a -> 'b) : 'a t -> 'b t = function
+  | Abs ts -> Abs (fmap f ts)
+  | App (ls, rs) -> App (fmap f ls, fmap f rs)
+  | Symbol s -> Symbol (f s)
 let (<$>) = fmap
 
+(* to support iteration, here's a zuper zipper *)
 module Zipper = struct
-    open CCOpt.Infix
-    open CCFun
-    (* zipper type for rose trees is actually rather complex, but we'll manage somehow *)
-    type 'a t = Z of 'a * 'a tree list * ('a * ('a tree list) * ('a tree list)) list
-    (* some setters and getters and whatnot *)
-    let get : 'a t -> 'a = function
-        | Z (v, _, _) -> v
-    let set (v : 'a) : 'a t -> 'a t = function
-        | Z (_, ts, zs) -> Z (v, ts, zs)
-    (* fancier ones *)
-    let get_tree : 'a t -> 'a tree = function
-        | Z (v, ts, _) -> make v ts
-    let set_tree (t : 'a tree) : 'a t -> 'a t = function
-        | Z (_, _, zs) -> match t with
-            | Leaf v -> Z (v, [], zs)
-            | Node (v, ts) -> Z (v, ts, zs)
-    (* constructors and destructors, always from trees *)
-    let of_tree : 'a tree -> 'a t = function
-        | Leaf v -> Z (v, [], [])
-        | Node (v, ts) -> Z (v, ts, [])
-    let rec to_tree (z : 'a t) : 'a tree =
-        let t = get_tree z in match z with
-            | Z (_, _, []) -> t
-            | Z (_, _, (f, ls, rs) :: zs) ->
-                let z' = Z (f, ls @ [t] @ rs, zs) in
-                    to_tree z'
-    (* of course, we need ways to move around the zipper *)
-    let up : 'a t -> 'a t option = function
-        | Z (_, _, []) -> None
-        | Z (v, ts, (f, ls, rs) :: zs) ->
-            let t = make v ts in
-                Some (Z (f, ls @ [t] @ rs, zs))
-    let down_at (pos : int) : 'a t -> 'a t option = function
-        | Z (v, ts, zs) -> if CCList.is_empty ts then None else
-            let f = fun (ls, t, rs) -> match t with
-                | Leaf v' -> Z (v', [], (v, ls, rs) :: zs)
-                | Node (v', ts') -> Z (v', ts', (v, ls, rs) :: zs)
-            in f <$> (Utility.split_at pos ts)
-    let down (z : 'a t) : 'a t option = down_at 0 z
-    let left : 'a t -> 'a t option = function
-        | Z (v, ts, (f, l, r) :: zs) ->
-            let r' = (make v ts) :: r in
-            let f = fun (ls', l') -> match l' with
-                | Leaf x' -> Z (x', [], (f, ls', r') :: zs)
-                | Node (f', ts') -> Z (f', ts', (f, ls', r') :: zs)
-            in f <$> (Utility.split_last l)
-        | _ -> None
-    let right : 'a t -> 'a t option = function
-        | Z (v, ts, (f, l, r) :: zs) ->
-            let l' = l @ [make v ts] in
-            let f = fun (r', rs') -> match r' with
-                | Leaf x' -> Z (x', [], (f, l', rs') :: zs)
-                | Node (f', ts') -> Z (f', ts', (f, l', rs') :: zs)
-            in f <$> (Utility.split_first r)
-        | _ -> None
-    (* and some more useful movement operators *)
-    let rec next (z : 'a t) : 'a t option = (right z) <+> (up z) >>= next
-    let preorder (z : 'a t) : 'a t option = (down z) <+> (next z)
-    let rec preorder_until (p : 'a -> bool) (z : 'a t) : 'a t option =
-        (CCOpt.if_ (p % get) z) <+> (preorder z) >>= (preorder_until p)
+  open CCOpt.Infix
+  open CCFun
+  (* zipper type is a little convoluted, so we sep branches and values *)
+  type 'a branch =
+    | A
+    | L of 'a term
+    | R of 'a term
+  type 'a t = 'a term * ('a branch) list
+  (* some getters and setters for the current tree *)
+  let get : 'a t -> 'a term = fst
+  let set (v : 'a term) : 'a t -> 'a t =
+    CCPair.map1 (fun c -> v)
+  let of_term (v : 'a term) : 'a t = (v, [])
+  let rec to_term (z : 'a t) : 'a term =
+    let current = fst z in match snd z with
+      | [] -> fst z
+      | [A :: bs] -> to_term (Abs current, bs)
+      | [L (other) :: bs] -> to_term (App (current, other), bs)
+      | [R (other) :: bs] -> to_term (App (other, current), bs)
+  (* and now we worry about movement *)
+  let up (z : 'a t) : 'a t option =
+    let current = fst z in match snd z with
+      | [] -> None
+      | [A :: bs] -> Some (Abs current, bs)
+      | [L (other) :: bs] -> Some (App (current, other), bs)
+      | [R (other) :: bs] -> Some (App (other, current), bs)
+  let down_left (z : 'a t) : 'a t option = match z with
+    | (p, zs) -> match p with
+      | Abs ts -> Some (ts, A :: zs)
+      | App (l, r) -> Some (l, (L r) :: zs)
+      | Symbol s -> None
+  let down_right (z : 'a t) : 'a t option = match z with
+    | (p, zs) -> match p with
+      | Abs ts -> Some (ts, A :: zs)
+      | App (l, r) -> Some (r, (R l) :: zs)
+      | Symbol s -> None
+  let left (z : 'a t) : 'a t option = match z with
+    | (p, (R other) :: zs) -> Some (other, (L p) :: zs)
+    | _ -> None
+  let right (z : 'a t) : 'a t option = match z with
+    | (p, (L other) :: zs) -> Some (other, (R p) :: zs)
+    | _ -> None
+  (* and some more useful iteration tools *)
+  let rec next (z : 'a t) : 'a t option = (right z) <+> (up z) >>= next
+  let preorder (z : 'a t) : 'a t option = (down_left z) <+> (next z)
+  let rec preorder_until (p : 'a term -> bool) (z : 'a t) : 'a t option =
+    (CCOpt.if_ (p % get) z ) <+> (preorder z) >>= (preorder_until p)
 end
