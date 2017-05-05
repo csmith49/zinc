@@ -3,5 +3,5 @@ open Term
 open Dtype
 open Program
 
-let f = Leaf "f"
+let f = Symbol "f"
 let _ = print_endline "Testing"
