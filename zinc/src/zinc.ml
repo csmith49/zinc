@@ -2,5 +2,5 @@ open Containers
 open Term
 open Dtype
 
-let f = Leaf "f"
+let f = Symbol "f"
 let _ = print_endline "Testing"

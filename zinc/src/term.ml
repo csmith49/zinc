@@ -21,7 +21,7 @@ module Zipper = struct
     | A
     | L of 'a term
     | R of 'a term
-  type 'a t = 'a term * ('a branch) list
+  type 'a t = 'a term * 'a branch list
   (* some getters and setters for the current tree *)
   let get : 'a t -> 'a term = fst
   let set (v : 'a term) : 'a t -> 'a t =
@@ -30,16 +30,16 @@ module Zipper = struct
   let rec to_term (z : 'a t) : 'a term =
     let current = fst z in match snd z with
       | [] -> fst z
-      | [A :: bs] -> to_term (Abs current, bs)
-      | [L (other) :: bs] -> to_term (App (current, other), bs)
-      | [R (other) :: bs] -> to_term (App (other, current), bs)
+      | A :: bs -> to_term (Abs current, bs)
+      | (L other) :: bs -> to_term (App (current, other), bs)
+      | (R other) :: bs -> to_term (App (other, current), bs)
   (* and now we worry about movement *)
   let up (z : 'a t) : 'a t option =
     let current = fst z in match snd z with
       | [] -> None
-      | [A :: bs] -> Some (Abs current, bs)
-      | [L (other) :: bs] -> Some (App (current, other), bs)
-      | [R (other) :: bs] -> Some (App (other, current), bs)
+      | A :: bs -> Some (Abs current, bs)
+      | (L other) :: bs -> Some (App (current, other), bs)
+      | (R other) :: bs -> Some (App (other, current), bs)
   let down_left (z : 'a t) : 'a t option = match z with
     | (p, zs) -> match p with
       | Abs ts -> Some (ts, A :: zs)
