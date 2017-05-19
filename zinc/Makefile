@@ -1,4 +1,4 @@
-ocb_flags = -r -use-ocamlfind -pkgs 'containers' -I src
+ocb_flags = -r -use-ocamlfind -pkgs 'containers, Z3' -I src
 ocb = ocamlbuild $(ocb_flags)
 
 .phony: all
@@ -10,4 +10,4 @@ zinc:
 
 .phony: clean
 clean:
-	$(ocb) -clean
+	rm -rf _build zinc

@@ -12,6 +12,11 @@ let rec fmap (f : 'a -> 'b) : 'a t -> 'b t = function
   | Symbol s -> Symbol (f s)
 let (<$>) = fmap
 
+(* and sometimes we want to extract our symbols, but don't know if we've got a symbol *)
+let extract : 'a term -> 'a option = function
+  | Symbol x -> Some x
+  | _ -> None
+
 (* to support iteration, here's a zuper zipper *)
 module Zipper = struct
   open CCOpt.Infix
