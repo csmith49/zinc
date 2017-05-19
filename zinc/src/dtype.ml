@@ -32,8 +32,6 @@ module Size = struct
         | Var v -> Variable.to_string v
         | Val i -> string_of_int i
         | Plus (s, i) -> (to_string s) ^ " + " ^ (string_of_int i)
-    (* TODO *)
-    let eq (l : t) (r : t) : bool = false
 end
 
 module Sensitivity = struct
@@ -51,8 +49,6 @@ module Sensitivity = struct
         | Plus (l, r) -> (to_string l) ^ " + " ^ (to_string r)
         | Times (l, r) -> (to_string l) ^ " * " ^ (to_string r)
         | Infinity -> "INF"
-    (* TODO *)
-    let leq (l : t) (r : t) : bool = false
 end
 
 (* our recursive data type *)
@@ -104,19 +100,11 @@ let rec to_string : t -> string = function
         let tys = to_string ty in
             "M(" ^ tys ^ ")"
 
-(* we care about subtyping *)
-(* no need to pass around kinding environment - we can tell based on pattern matching *)
-(* we also assume that there aren't any assumptions about annotations *)
-let rec subtypes (l : t) (r : t) : bool = match (l, r) with
-    | Base bl, Base br -> bl = br
-    | Precise pl, Precise pr -> begin match pl, pr with
-        | N sl, N sr -> Size.eq sl sr
-        | M (sl, tl), M (sr, tr) -> (Size.eq sl sr) && (subtypes tl tr)
-        | _ -> false
-    end
-    | Quantified (ql, _, tl), Quantified (qr, _, tr) when ql = qr -> subtypes tl tr
-    | Function (Scale (sl, ll), lr), Function (Scale (sr, rl), rr) ->
-        (subtypes rl ll) && (subtypes lr rr) && (Sensitivity.leq sr sl)
-    | Tensor (ll, lr), Tensor (rl, rr) -> (subtypes ll rl) && (subtypes lr rr)
-    | Multiset tl, Multiset tr -> subtypes tl tr
-    | _ -> false
+(* of course, we have to deal with typing contexts, also as variables *)
+module Context = struct
+    type t =
+        | Empty
+        | Add of t * t
+        | Scale of float * t
+        | Var of Variable.t
+end
