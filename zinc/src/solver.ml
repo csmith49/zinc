@@ -8,7 +8,7 @@ let context = mk_context []
 
 (* conversion functions *)
 let make_rational (n : int) (d : int) : expr = Arithmetic.Real.mk_numeral_nd context n d
-let make_variable (x : string) : expr = Arithmetic.Real.mk_const_s context x
+let make_variable (x : Variable.t) : expr = Arithmetic.Real.mk_const_s context (Variable.to_string x)
 
 (* and syntax functions *)
 let make_and (l : expr) (r : expr) : expr = Boolean.mk_and context [l; r]
