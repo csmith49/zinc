@@ -24,3 +24,9 @@ let make_fresh prefix =
 
 (* and some other misc helper functions *)
 let compare = Pervasives.compare
+
+(* some combiner operations *)
+let concat (l : t) (s : string) (r : t) : t =
+    let ls = to_string l in
+    let rs = to_string r in
+        make (ls ^ s ^ rs)

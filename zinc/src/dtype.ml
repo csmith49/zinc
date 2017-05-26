@@ -11,8 +11,8 @@ and base =
     | Database
 and precise = M of Sensitivity.t * t
 and quantifier =
-    | Exists of Variable.t list
-    | ForAll of Variable.t list
+    | Exists of Variable.t
+    | ForAll of Variable.t
 and modal =
     | S of Sensitivity.t * t
 
@@ -23,45 +23,11 @@ let rec to_string : t -> string = function
     | Quantified (q, ty) ->
         let qs = quantifier_to_string q in
         let tys = to_string ty in
-            qs ^ "." ^ ts
-    | Function (m, ty) -> ""
-    | Tensor (l, r) -> ""
-    | Multiset ty -> ""
-and base_to_string : base -> string = function
-    | Real -> "R"
-    | Database -> "DB"
-and precise_to_string : precise -> string = function
-    | M (s, ty) -> ""
-and quantifier_to_string : quantifier -> string = function
-    | Exists xs -> ""
-    | Forall xs -> ""
-and modal_to_string : modal -> string = function
-    | S (s, ty) -> ""
-
-
-
-(* which we immediately figure out how to print *)
-let rec to_string : t -> string = function
-    | Base b -> begin match b with
-        | Real -> "R"
-        | Database -> "DB"
-    end
-    | Precise p -> begin match p with
-        | N size -> "N[" ^ (Size.to_string size) ^ "]"
-        | M (size, ty) -> "M(" ^ (to_string ty) ^ ")[" ^ (Size.to_string size) ^ "]"
-    end
-    | Quantified (q, vl, ty) ->
-        let qs = Quantifier.to_string q in
-        let vls = vl
-                |> TypeEnvironment.to_list
-                |> CCList.map (fun (k, v) -> (Variable.to_string k) ^ ": " ^ (to_string v))
-                |> Utility.fold (fun x y -> x ^ ", " ^ y) in
+            qs ^ "." ^ tys
+    | Function (m, ty) ->
+        let ms = modal_to_string m in
         let tys = to_string ty in
-            qs ^ "(" ^ vls ^ ")." ^ tys
-    | Function (l, r) ->
-        let ls = to_string l in
-        let rs = to_string r in
-            ls ^ " -o " ^ rs
+            ms ^ " -o " ^ tys
     | Tensor (l, r) ->
         let ls = to_string l in
         let rs = to_string r in
@@ -69,19 +35,26 @@ let rec to_string : t -> string = function
     | Multiset ty ->
         let tys = to_string ty in
             "M(" ^ tys ^ ")"
-    | Modal of (s, ty) ->
+and base_to_string : base -> string = function
+    | Real -> "R"
+    | Database -> "DB"
+and precise_to_string : precise -> string = function
+    | M (s, ty) ->
         let ss = Sensitivity.to_string s in
         let tys = to_string ty in
-            "!_(" ^ ss ^ "):" ^ tys
+            "M(" ^ tys ^ ")[" ^ ss ^ "]"
+and quantifier_to_string : quantifier -> string = function
+    | Exists x ->
+        let xs = Variable.to_string x in
+            "Exists(" ^ xs ^ ")"
+    | ForAll x ->
+        let xs = Variable.to_string x in
+            "ForAll(" ^ xs ^ ")"
+and modal_to_string : modal -> string = function
+    | S (s, ty) ->
+        let ss = Sensitivity.to_string s in
+        let tys = to_string ty in
+            "!(" ^ tys ^ ")[" ^ ss ^ "]"
 
-(* and enforce basic comparison operations *)
-let compare (l : t) (r : t) : int = match l, r with
-    | Top, Top -> 0
-    | Top, _ -> 1
-    | _, Top -> -1
-    | _, _ -> Pervasives.compare l r
-
-(* and then lift our arithmetic up *)
-let rec add (l : t) (r : t) : t option = match l, r with
-    | Top, Top -> Some Top
-    | Top, _ -> Some Top
+(* we use default comparisons *)
+let compare = Pervasives.compare

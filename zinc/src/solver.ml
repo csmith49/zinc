@@ -16,3 +16,10 @@ let make_and_list (ls: expr list) : expr = Boolean.mk_and context ls
 
 let make_add (l : expr) (r : expr) : expr = Arithmetic.mk_add context [l; r]
 let make_times (l : expr) (r : expr) : expr = Arithmetic.mk_mul context [l; r]
+
+let make_leq (l : expr) (r : expr) : expr =
+    Arithmetic.mk_le context l r
+let make_geq (l : expr) (r: expr) : expr =
+    Arithmetic.mk_ge context l r
+let make_eq (l : expr) (r : expr) : expr =
+    make_and (make_leq l r) (make_geq l r)

@@ -34,3 +34,8 @@ let mult (a : t) (b : t) : t = match a, b with
 let rec to_z3 : t -> Solver.expr = function
     | Infinity -> to_z3 max_q
     | Q (n, d) -> Solver.make_rational n d
+
+(* TODO *)
+let enforce_bounds (x : Variable.t) : Solver.expr =
+    let xs = Solver.make_variable x in
+        Solver.make_and (Solver.make_leq xs (to_z3 max_q)) (Solver.make_geq xs (to_z3 zero_q))
