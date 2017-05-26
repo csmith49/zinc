@@ -39,6 +39,9 @@ module ExtendedModal = struct
     (* and a slightly less simple constructor *)
     let symbolic (x : Variable.t) : t =
         S (Sensitivity.Variable x, Top)
+    (* and finally a type covnerter *)
+    let of_dtype (d : Dtype.t) : t =
+        S (Sensitivity.Value (Rational.Q (1, 1)), Concrete d)
 end
 
 (* simple grammar to express contetxs *)
