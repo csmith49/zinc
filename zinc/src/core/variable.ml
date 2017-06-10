@@ -9,7 +9,7 @@ module Internal = struct
     module PrefixMap = CCMap.Make(String)
     let counts = ref PrefixMap.empty
     (* we don't really care about having multiple counts, so we'll encapsulate it here *)
-    let get_count (prefix : string) : int = PrefixMap.get_or prefix !counts ~default:0
+    let get_count (prefix : string) : int = PrefixMap.get_or ~default:0 prefix !counts
     let set_count (prefix : string) (count : int) : unit = begin
             counts := PrefixMap.add prefix count !counts
         end
