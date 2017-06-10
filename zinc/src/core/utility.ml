@@ -1,5 +1,8 @@
 open CCOpt.Infix
 
+(* a common module, seen all over *)
+module StringMap = CCMap.Make(String)
+
 (* split a list into the elements before, at and after an index *)
 let rec split_at (pos : int) (ls : 'a list) : ('a list * 'a * 'a list) option = match ls with
     | [] -> None

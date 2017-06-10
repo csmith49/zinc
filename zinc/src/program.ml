@@ -2,10 +2,10 @@ open CCFun
 
 (* the information we actually care about passing around *)
 type node =
-    | Wild of Dtype.t * Dtype.Context.t
-    | Function of label
-    | Variable of label
-and label = string
+    (* | Wild of Dtype.t * Dtype.Context.t *)
+    | Wild of Dtype.t * string
+    | Function of string
+    | Variable of Variable.t
 
 (* some helpers for iteration and whatnot *)
 let is_wild : node -> bool = function
@@ -29,4 +29,4 @@ let rec to_string : t -> string = function
     | Term.Symbol s -> match s with
         | Wild _ -> "?"
         | Function f -> f
-        | Variable v -> v
+        | Variable v -> Variable.to_string v
