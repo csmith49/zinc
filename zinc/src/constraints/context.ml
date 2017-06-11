@@ -50,6 +50,7 @@ type t =
     | Variable of Variable.t
     | Plus of t * t
     | Times of Sensitivity.t * t
+    | Empty
 
 (* the ever-present printing method *)
 let rec to_string : t -> string = function
@@ -63,6 +64,11 @@ let rec to_string : t -> string = function
         let ss = Sensitivity.to_string s in
         let cs = to_string c in
             ss ^ " * " ^ cs
+    | Empty -> "{}"
+
+(* typically, we'll construct variable contexts *)
+let make_fresh_variable (u : unit) : t =
+    Variable (Variable.make_fresh "context")
 
 (* importantly, we want to know the finite support of a context *)
 let rec support : t -> Variable.t list = function
@@ -70,6 +76,7 @@ let rec support : t -> Variable.t list = function
     | Variable v -> []
     | Plus (l, r) -> (support l) @ (support r)
     | Times (s, c) -> support c
+    | Empty -> []
 (* so that we only really access the types of variables we need to check *)
 let rec get_type (x : Variable.t) (c : t) : ExtendedModal.t = match c with
     | Context (y, s) ->
@@ -84,6 +91,7 @@ let rec get_type (x : Variable.t) (c : t) : ExtendedModal.t = match c with
     | Times (s, c) ->
         let ct = get_type x c in
             ExtendedModal.mult s ct
+    | Empty -> ExtendedModal.empty
 (* so that we can easily grab the appropriate sensitivity *)
 let get_sensitivity (x : Variable.t) (c : t) : Sensitivity.t =
     ExtendedModal.sensitivity (get_type x c)

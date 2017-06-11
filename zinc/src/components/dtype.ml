@@ -22,15 +22,17 @@ and modal =
 
 (* there are some very important accessors we'll want to do for curried types *)
 let strip_modality : modal -> t = function
-    | S (sens, s) -> s
+    | S (_, s) -> s
+let strip_type : modal -> Sensitivity.t = function
+    | S (sens, _) -> sens
 
 let rec output_type : t -> t = function
     | Function (m, s) -> output_type s
     | (_ as s) -> s
 
-let rec input_types : t -> t list = function
-    | Function (m, s) -> (strip_modality m) :: (input_types s)
-    | (_ as s) -> [s]
+let rec input_types : t -> modal list = function
+    | Function (m, s) -> m :: (input_types s)
+    | (_ as s) -> []
 
 (* where we start to encode the basic functionality - printing, most importantly *)
 let rec to_string : t -> string = function
