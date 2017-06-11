@@ -6,15 +6,31 @@ type t =
     | Function of modal * t
     | Tensor of t * t
     | Multiset of t
+    | List of t
 and base =
     | Real
     | Database
+    | String
+    | Int
+    | Bool
 and precise = M of Sensitivity.t * t
 and quantifier =
     | Exists of Variable.t
     | ForAll of Variable.t
 and modal =
     | S of Sensitivity.t * t
+
+(* there are some very important accessors we'll want to do for curried types *)
+let strip_modality : modal -> t = function
+    | S (sens, s) -> s
+
+let rec output_type : t -> t = function
+    | Function (m, s) -> output_type s
+    | (_ as s) -> s
+
+let rec input_types : t -> t list = function
+    | Function (m, s) -> (strip_modality m) :: (input_types s)
+    | (_ as s) -> [s]
 
 (* where we start to encode the basic functionality - printing, most importantly *)
 let rec to_string : t -> string = function
@@ -35,9 +51,15 @@ let rec to_string : t -> string = function
     | Multiset ty ->
         let tys = to_string ty in
             "M(" ^ tys ^ ")"
+    | List ty ->
+        let tys = to_string ty in
+            "L(" ^ tys ^ ")"
 and base_to_string : base -> string = function
     | Real -> "R"
     | Database -> "DB"
+    | Int -> "N"
+    | String -> "S"
+    | Bool -> "2"
 and precise_to_string : precise -> string = function
     | M (s, ty) ->
         let ss = Sensitivity.to_string s in

@@ -1,26 +1,29 @@
 open CCFun
+open CCOpt.Infix
 
 (* the information we actually care about passing around *)
 type node =
     (* | Wild of Dtype.t * Dtype.Context.t *)
-    | Wild of Dtype.t * string
+    | Wild of Dtype.t * Context.t
     | Function of string
     | Variable of Variable.t
 
 (* some helpers for iteration and whatnot *)
-let is_wild : node -> bool = function
+let node_is_wild : node -> bool = function
     | Wild _ -> true
-    | _ -> false
-let is_function : node -> bool = function
-    | Function _ -> true
-    | _ -> false
-let is_variable : node -> bool = function
-    | Variable _ -> true
     | _ -> false
 
 (* and our programs *)
 type t = node Term.t
 type context = node Term.Zipper.t
+
+(* with some more useful accessor functions and whatnot *)
+let get_node : context -> node option =
+    Term.extract % Term.Zipper.get
+
+let is_wild (p : t) : bool =
+    let n = Term.extract p in
+        CCOpt.get_or ~default:false (node_is_wild <$> n)
 
 (* for printings sake *)
 let rec to_string : t -> string = function

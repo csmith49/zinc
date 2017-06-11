@@ -31,6 +31,7 @@ module Zipper = struct
   let get : 'a t -> 'a term = fst
   let set (v : 'a term) : 'a t -> 'a t =
     CCPair.map1 (fun c -> v)
+  (* and for getting current symbols *)
   let of_term (v : 'a term) : 'a t = (v, [])
   let rec to_term (z : 'a t) : 'a term =
     let current = fst z in match snd z with

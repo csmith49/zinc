@@ -4,7 +4,7 @@ ocb = ocamlbuild $(ocb_flags)
 .phony: all
 all: zinc
 
-zinc:
+zinc: $(shell find src -type f) $(shell find builtins -type f)
 	$(ocb) zinc.native
 	mv zinc.native zinc
 

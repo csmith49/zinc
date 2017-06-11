@@ -27,3 +27,14 @@ let rec eval (p : Program.t) (s : t) (e : environment) : Value.t = match p with
         | Program.Function l ->
             (Utility.StringMap.find l s) |> Function.to_value
         | Program.Variable l -> Utility.StringMap.find (Variable.to_string l) e
+
+(* naturally, we want printing. we always do *)
+let to_string (s : t) : string =
+    Utility.StringMap.bindings s
+        |> CCList.map fst
+        |> Utility.fold (fun x y -> x ^ ", " ^ y)
+        |> fun x -> "[|" ^ x ^ "|]"
+
+(* and we handle organization of the actual functions in builtins.ml - we just need a way to convert lists to sigs *)
+let list_to_signature (fs : Function.t list) : Function.t Utility.StringMap.t =
+    CCList.fold_right (fun f a -> Utility.StringMap.add (Function.name f) f a) fs Utility.StringMap.empty

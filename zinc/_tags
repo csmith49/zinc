@@ -1,4 +1,6 @@
+"builtins": include
 "src": include
 "src/constraints": include
 "src/core": include
 "src/components": include
+"src/search": include
