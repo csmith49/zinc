@@ -10,9 +10,7 @@ type environment = Value.t Utility.StringMap.t
 (* evaluate a program with respect to a signature and environment *)
 let rec eval (p : Program.t) (s : t) (e : environment) : Value.t = match p with
     (* introduce a new bound variable, generate an evaluating closure, and wrapping as a value *)
-    | Term.Abs sub_p ->
-        let bd = Variable.binding_depth e in
-        let x = Variable.make_fresh_debruijn bd in
+    | Term.Abs (x, sub_p) ->
         let f = (fun v -> let e' = Utility.StringMap.add (Variable.to_string x) v e in eval sub_p s e')
         in Value.Function f
     (* just evaluate the left and then apply it to the right *)

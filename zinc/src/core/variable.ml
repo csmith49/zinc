@@ -21,15 +21,6 @@ let make_fresh prefix =
     let i = Internal.get_count prefix in
     let _ = Internal.set_count prefix (i + 1) in
         prefix ^ "_" ^ (string_of_int i)
-(* and we occasionally make some fancy ones *)
-let make_fresh_debruijn bd =
-    "debruijn_" ^ (string_of_int bd)
-
-(* to make debruijn, we need to know binding depth *)
-let binding_depth (e : 'a Utility.StringMap.t) : int =
-    e   |> Utility.StringMap.filter
-            (fun k v -> CCString.prefix ~pre:"debruijn_" k)
-        |> Utility.StringMap.cardinal
 
 (* and some other misc helper functions *)
 let compare = Pervasives.compare

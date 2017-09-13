@@ -1,13 +1,14 @@
 (* updated versions - we use applicative style to model our terms, with debruijn indices *)
+(* further updated - no debruijn anymore, clashes with contexts *)
 type 'a t =
-  | Abs of 'a t
+  | Abs of Variable.t * 'a t
   | App of 'a t * 'a t
   | Symbol of 'a
 type 'a term = 'a t
 
 (* our terms are instances of functors *)
 let rec fmap (f : 'a -> 'b) : 'a t -> 'b t = function
-  | Abs ts -> Abs (fmap f ts)
+  | Abs (x, ts) -> Abs (x, fmap f ts)
   | App (ls, rs) -> App (fmap f ls, fmap f rs)
   | Symbol s -> Symbol (f s)
 let (<$>) = fmap
@@ -17,13 +18,18 @@ let extract : 'a term -> 'a option = function
   | Symbol x -> Some x
   | _ -> None
 
+(* random utilities *)
+let is_abs : 'a t -> bool = function
+    | Abs _ -> true
+    | _ -> false
+
 (* to support iteration, here's a zuper zipper *)
 module Zipper = struct
   open CCOpt.Infix
   open CCFun
   (* zipper type is a little convoluted, so we sep branches and values *)
   type 'a branch =
-    | A
+    | A of Variable.t
     | L of 'a term
     | R of 'a term
   type 'a t = 'a term * 'a branch list
@@ -36,24 +42,24 @@ module Zipper = struct
   let rec to_term (z : 'a t) : 'a term =
     let current = fst z in match snd z with
       | [] -> fst z
-      | A :: bs -> to_term (Abs current, bs)
+      | (A x) :: bs -> to_term (Abs (x, current), bs)
       | (L other) :: bs -> to_term (App (current, other), bs)
       | (R other) :: bs -> to_term (App (other, current), bs)
   (* and now we worry about movement *)
   let up (z : 'a t) : 'a t option =
     let current = fst z in match snd z with
       | [] -> None
-      | A :: bs -> Some (Abs current, bs)
+      | (A x) :: bs -> Some (Abs (x, current), bs)
       | (L other) :: bs -> Some (App (current, other), bs)
       | (R other) :: bs -> Some (App (other, current), bs)
   let down_left (z : 'a t) : 'a t option = match z with
     | (p, zs) -> match p with
-      | Abs ts -> Some (ts, A :: zs)
+      | Abs (x, ts) -> Some (ts, (A x) :: zs)
       | App (l, r) -> Some (l, (L r) :: zs)
       | Symbol s -> None
   let down_right (z : 'a t) : 'a t option = match z with
     | (p, zs) -> match p with
-      | Abs ts -> Some (ts, A :: zs)
+      | Abs (x, ts) -> Some (ts, (A x):: zs)
       | App (l, r) -> Some (r, (R l) :: zs)
       | Symbol s -> None
   let left (z : 'a t) : 'a t option = match z with

@@ -25,9 +25,17 @@ let is_wild (p : t) : bool =
     let n = Term.extract p in
         CCOpt.get_or ~default:false (node_is_wild <$> n)
 
+let rec variables_in_scope (c : context) : Variables.t list =
+    let xs = match Term.Zipper.get c with
+        | Term.Abs (x, _) -> [x]
+        | _ -> []
+    in match Term.Zipper.up c with
+        | Some c' -> xs @ (variables_in_scope c')
+        | _ -> xs
+
 (* for printings sake *)
 let rec to_string : t -> string = function
-    | Term.Abs e -> "\\." ^ (to_string e)
+    | Term.Abs (x, e) -> "\\" ^ (Variable.to_string x) ^ "." ^ (to_string e)
     | Term.App (l, r) -> "(" ^ (to_string l) ^ " " ^ (to_string r) ^ ")"
     | Term.Symbol s -> match s with
         | Wild _ -> "?"
