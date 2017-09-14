@@ -4,13 +4,6 @@ open CCOpt.Infix
 (* think of these as nodes in our search *)
 type synth_task = Program.t * Constraint.t
 
-
-
-
-
-
-
-
 (* we move from task to task in our search *)
 type task = Program.t * Constraint.t
 type t = task Frontier.t
@@ -23,14 +16,15 @@ type solution = Program.t * Solver.expr
 
 (* this allows us to express our search in a simple pipeline *)
 
-let get_solutions : parameters -> solution list = []
+let get_solutions : parameters -> solution list = fun _ -> []
 let apply_solution : task -> solution -> task = failwith "undef"
 
 (* step 1: crack open the relevant program *)
-let make_subtasks : task -> task list = function
+(* TODO: fix *)
+(* let make_subtasks : task -> task list = function
     | (p, c) ->
         let wild_context = Term.Zipper.preorder_until (not % Program.is_wild) (Term.Zipper.of_term p) in
-        let wild_params =
+        let wild_params = [] *)
 
 (* given a program, find the first wildcard if it exists *)
 let find_wild (p : Program.t) : Program.context option =

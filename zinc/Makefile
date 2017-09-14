@@ -1,4 +1,4 @@
-ocb_flags = -r -use-ocamlfind -pkgs 'containers, Z3'
+ocb_flags = -r -use-ocamlfind -pkgs 'containers, Z3' -I "~/Documents/code/iron/_build/src/iron.cma"
 ocb = ocamlbuild $(ocb_flags)
 
 .phony: all

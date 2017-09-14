@@ -25,7 +25,7 @@ let is_wild (p : t) : bool =
     let n = Term.extract p in
         CCOpt.get_or ~default:false (node_is_wild <$> n)
 
-let rec variables_in_scope (c : context) : Variables.t list =
+let rec variables_in_scope (c : context) : Variable.t list =
     let xs = match Term.Zipper.get c with
         | Term.Abs (x, _) -> [x]
         | _ -> []
