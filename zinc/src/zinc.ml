@@ -15,3 +15,5 @@ let goals = []
 open Enumerate
 open Constraint
 open Signature
+
+open Zipper

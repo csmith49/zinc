@@ -12,7 +12,7 @@ let compare (a : t) (b : t) : int = match a, b with
     | Infinity, Infinity -> 0
     | Infinity, _ -> 1
     | _, Infinity -> -1
-    | _ -> Pervasives.compare a b
+    | Q (x, y), Q (n, d) -> Pervasives.compare (x * d) (y * n)
 
 (* we need ways to convert qs to various types, and from various types *)
 let of_int (i : int) : t = Q (i, 1)
@@ -29,6 +29,8 @@ let mult (a : t) (b : t) : t = match a, b with
     | Infinity, _ -> Infinity
     | _, Infinity -> Infinity
     | Q (x, y), Q (n, d) -> Q (x * n, y * d)
+
+
 
 (* finally, we have to convert to z3 objects *)
 let rec to_z3 : t -> Solver.expr = function
