@@ -27,13 +27,11 @@ let rec name_to_db (name : Name.t) (depth : int) (s : t) : t = match s with
   | Plus (l, r) -> Plus (name_to_db name depth l, name_to_db name depth r)
   | Size s' -> Size (Size.name_to_db name depth s')
   | Const _ -> s
-  | Var v -> match v with
-    | Variable.Free n' -> if n' == name then Var (Variable.Bound depth) else s
-    | _ -> s
+  | Var v -> Var (Variable.name_to_db name depth v)
 
-let rec replace (img : t) (depth : int) (s : t) : t = match s with
-  | Mult (l, r) -> Mult (replace img depth l, replace img depth r)
-  | Plus (l, r) -> Plus (replace img depth l, replace img depth r)
-  | Size s' -> s
+let rec db_to_name (depth : int) (img : Name.t) (s : t) : t = match s with
+  | Mult (l, r) -> Mult (db_to_name depth img l, db_to_name depth img r)
+  | Plus (l, r) -> Plus (db_to_name depth img l, db_to_name depth img r)
+  | Size s' -> Size (Size.db_to_name depth img s')
   | Const _ -> s
-  | Var v -> if Variable.matches v depth then img else s
+  | Var v -> Var (Variable.db_to_name depth img v)

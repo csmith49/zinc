@@ -14,11 +14,6 @@ let name_to_db (name : Name.t) (depth : int) (v : t) : t = match v with
   | Free n' -> if n' == name then Bound depth else v
   | _ -> v
 
-let replace (img : t) (depth : int) (v : t) : t = match v with
-  | Bound i -> if i == depth then img else v
+let db_to_name (depth : int) (img : Name.t) (v : t) : t = match v with
+  | Bound i -> if i == depth then Free img else v
   | _ -> v
-
-(* and a helper for higher levels *)
-let matches (v : t) (depth : int) : bool = match v with
-  | Bound i -> i == depth
-  | _ -> false
