@@ -3,10 +3,6 @@ type t =
     | Infinity
     | Q of int * int
 
-(* we don't actually have a way to encode infinity, so we do this instead *)
-let max_q = Q (128, 1)
-let zero_q = Q (0, 1)
-
 (* comparison probably doesn't need to be done, but we'll do it anyways *)
 let compare (a : t) (b : t) : int = match a, b with
     | Infinity, Infinity -> 0
@@ -30,12 +26,18 @@ let mult (a : t) (b : t) : t = match a, b with
     | _, Infinity -> Infinity
     | Q (x, y), Q (n, d) -> Q (x * n, y * d)
 
-(* finally, we have to convert to z3 objects *)
-let rec to_z3 : t -> Solver.expr = function
-    | Infinity -> to_z3 max_q
-    | Q (n, d) -> Solver.make_rational n d
+(* some simple utility functions for helping out *)
+let rec gcd (x : int) (y : int) : int =
+  if y == 0 then x else gcd y (x mod y)
 
-(* TODO *)
-let enforce_bounds (x : Variable.t) : Solver.expr =
-    let xs = Solver.make_variable x in
-        Solver.make_and (Solver.make_leq xs (to_z3 max_q)) (Solver.make_geq xs (to_z3 zero_q))
+(* we _might_ want to reduce down to a simpler form every once in a while *)
+let reduce : t -> t = function
+  | Infinity -> Infinity
+  | Q (n, d) -> if d == 0 then Infinity else
+    let g = gcd n d in Q (n / g, d / g)
+
+(* wrapping math operators as infix *)
+module Infix = struct
+  let ( +% ) (a : t) (b : t) : t = add a b
+  let ( *% ) (a : t) (b : t) : t = mult a b
+end
