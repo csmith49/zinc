@@ -1,98 +1,84 @@
-(* base type information *)
-module Quantifier = struct
-  type t =
-    | Exists
-    | ForAll
-  let to_string : t -> string = function
-    | Exists -> "Exists"
-    | ForAll -> "ForAll"
-end
-
-module Base = struct
-  type t =
-    | Real
-    | Integer
-    | Bool
-    | String
-    | Database
-  let to_string : t -> string = function
-    | Real -> "Real"
-    | Integer -> "Integer"
-    | Bool -> "Bool"
-    | String -> "String"
-    | Database -> "DB"
-end
-
+(* base type *)
 type t =
-  | Var of Variable.t
-  | Base of Base.t
+  | Free of Name.t
+  | Bound of int
   | Precise of precise
-  | Quant of Quantifier.t * scope
+  | Quant of quantifier * kind * scope
   | Func of modal * t
   | Tensor of t * t
-  | Bind of scope
+  | Base of base
+  | Payload of payload
 and precise =
   | N of Size.t
   | M of Size.t * t
   | R of Sensitivity.t
-and scope = Scope of t
+and quantifier =
+  | Exists
+  | ForAll
+and kind =
+  | KSens
+  | KSize
+  | KType
+and scope = Sc of t
 and modal = Modal of Sensitivity.t * t
+and base =
+  | Real
+  | Integer
+  | Bool
+  | String
+  | Database
+and payload =
+  | PSens of Sensitivity.t
+  | PSize of Size.t
 
-(* mcbride and mckinna name conversion through abstraction and instantiation *)
-let rec name_to_db (name : Name.t) (depth : int) (dt : t) : t = match dt with
-  | Bind (Scope dt') -> Bind (Scope (name_to_db name (depth + 1) dt'))
-  | Tensor (l, r) -> Tensor (name_to_db name depth l, name_to_db name depth r)
-  | Func (m, dt') -> Func (modal_name_to_db name depth m, name_to_db name depth dt')
-  | Quant (q, Scope dt') -> Quant (q, Scope (name_to_db name (depth + 1) dt'))
-  | Precise p -> Precise (precise_name_to_db name depth p)
-  | Base _ -> dt
-  | Var v -> Var (Variable.name_to_db name depth v)
-and precise_name_to_db (name : Name.t) (depth : int) (p : precise) : precise = match p with
-  | N s -> N (Size.name_to_db name depth s)
-  | M (s, dt) -> M (Size.name_to_db name depth s, name_to_db name depth dt)
-  | R s -> R (Sensitivity.name_to_db name depth s)
-and modal_name_to_db (name : Name.t) (depth : int) (m : modal) : modal = match m with
-  | Modal (s, dt) -> Modal (Sensitivity.name_to_db name depth s, name_to_db name depth dt)
+(* mcbride and mckinna *)
+let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
+  | Free n' -> if n == n' then (Bound db) else dt
+  | Precise p -> begin match p with
+      | N s -> Precise (N (Size.name_to n db s))
+      | M (s, dt') -> Precise (M (Size.name_to n db s, name_to n db dt'))
+      | R s -> Precise (R (Sensitivity.name_to n db s))
+  end
+  | Quant (q, k, Sc body) -> Quant (q, k, Sc (name_to n (db + 1) body))
+  | Func (m, codom) -> begin match m with
+      | Modal (s, dom) -> Func (Modal (Sensitivity.name_to n db s, name_to n db dom), name_to n db codom)
+  end
+  | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
+  | Payload _ -> failwith "can't modify payload in transit"
+  | _ -> dt (* catches Base and Bound case *)
 
-let rec db_to_name (depth : int) (name : Name.t) (dt : t) : t = match dt with
-  | Bind (Scope dt') -> Bind (Scope (db_to_name (depth + 1) name dt'))
-  | Tensor (l, r) -> Tensor (db_to_name depth name l, db_to_name depth name r)
-  | Func (m, dt') -> Func (modal_db_to_name depth name m, db_to_name depth name dt')
-  | Quant (q, Scope dt') -> Quant (q, Scope (db_to_name (depth + 1) name dt'))
-  | Precise p -> Precise (precise_db_to_name depth name p)
-  | Base _ -> dt
-  | Var v -> Var (Variable.db_to_name depth name v)
-and precise_db_to_name (depth : int) (name : Name.t) (p : precise) : precise = match p with
-  | N s -> N (Size.db_to_name depth name s)
-  | M (s, dt) -> M (Size.db_to_name depth name s, db_to_name depth name dt)
-  | R s -> R (Sensitivity.db_to_name depth name s)
-and modal_db_to_name (depth : int) (name : Name.t) (m : modal) : modal = match m with
-  | Modal (s, dt) -> Modal (Sensitivity.db_to_name depth name s, db_to_name depth name dt)
+let rec replace (img : t) (db : int) (dt : t) : t = match dt with
+  | Bound i -> if i == db then img else dt
+  | Precise p -> begin match p with
+      | N s ->
+        let s' = begin match img with
+          | Payload (PSize size) -> Size.replace size db s
+          | _ -> s
+        end in Precise (N s')
+      | M (s, dt') ->
+        let s' = begin match img with
+          | Payload (PSize size) -> Size.replace size db s
+          | _ -> s
+        end in Precise (M (s', replace img db dt'))
+      | R s ->
+        let s' = begin match img with
+          | Payload (PSens sens) -> Sensitivity.replace sens db s
+          | _ -> s
+        end in Precise (R s')
+    end
+  | Quant (q, k, Sc body) -> Quant (q, k, Sc (replace img (db + 1) body))
+  | Func (m, codom) -> begin match m with
+      | Modal (s, dom) ->
+        let s' = begin match img with
+          | Payload (PSens sens) -> Sensitivity.replace sens db s
+          | _ -> s
+        end in Func (Modal (s', replace img db dom), replace img db codom)
+    end
+  | Tensor (l, r) -> Tensor (replace img db l, replace img db r)
+  | Payload _ -> failwith "can't replace payload in transit"
+  | _ -> dt (* catches base and bound case *)
 
-(* note that instantiation here is weaker - all we can do is rename a variable, not replace it arbitrarily *)
-let abstract (name : Name.t) (dt : t) : scope = Scope (name_to_db name 0 dt)
-let instantiate (name : Name.t) (s : scope) : t = match s with
-    Scope dt -> db_to_name 0 name dt
-
-(* let's be honest, the above is not easy to deal with when making new types *)
-(* if we define enough extra functions (including infix), maybe we can cobble together a reasonable meta language *)
-(* it'd be really nice to have modular implicits here, so that we could overload constructors based on strings vs ints *)
-module Make = struct
-  (* non-sensitive function application *)
-  let (=>) (d : t) (cd : t) : t =
-    Func (Modal (Sensitivity.Const Rational.Infinity, d), cd)
-
-  (* regular function application *)
-  let (-*) (m : modal) (cd : t) : t = Func (m, cd)
-
-  (* tensor construction *)
-  let ( * ) (l : t) (r : t) : t = Tensor (l, r)
-
-  (* existential quantifier *)
-  let exists : (string * t) -> t = function
-    (s, dt) -> Quant (Quantifier.Exists, abstract (Name.of_string s) dt)
-
-  (* universial quantifier *)
-  let forall : (string * t) -> t = function
-    (s, dt) -> Quant (Quantifier.ForAll, abstract (Name.of_string s) dt)
-end
+(* the payoff *)
+let abstract (n : Name.t) (dt : t) : scope = Sc (name_to n 0 dt)
+let instantiate (img: t) (s : scope) : t = match s with
+  | Sc body -> replace img 0 body
