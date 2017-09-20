@@ -26,10 +26,10 @@ type t =
   | Var of Variable.t
   | Base of Base.t
   | Precise of precise
-  | DQuant of Quantifier.t * scope
+  | Quant of Quantifier.t * scope
   | Func of modal * t
   | Tensor of t * t
-  | ForAll of scope
+  | Bind of scope
 and precise =
   | N of Size.t
   | M of Size.t * t
@@ -39,10 +39,10 @@ and modal = Modal of Sensitivity.t * t
 
 (* mcbride and mckinna name conversion through abstraction and instantiation *)
 let rec name_to_db (name : Name.t) (depth : int) (dt : t) : t = match dt with
-  | ForAll (Scope dt') -> ForAll (Scope (name_to_db name (depth + 1) dt'))
+  | Bind (Scope dt') -> Bind (Scope (name_to_db name (depth + 1) dt'))
   | Tensor (l, r) -> Tensor (name_to_db name depth l, name_to_db name depth r)
   | Func (m, dt') -> Func (modal_name_to_db name depth m, name_to_db name depth dt')
-  | DQuant (q, Scope dt') -> DQuant (q, Scope (name_to_db name (depth + 1) dt'))
+  | Quant (q, Scope dt') -> Quant (q, Scope (name_to_db name (depth + 1) dt'))
   | Precise p -> Precise (precise_name_to_db name depth p)
   | Base _ -> dt
   | Var v -> Var (Variable.name_to_db name depth v)
@@ -54,10 +54,10 @@ and modal_name_to_db (name : Name.t) (depth : int) (m : modal) : modal = match m
   | Modal (s, dt) -> Modal (Sensitivity.name_to_db name depth s, name_to_db name depth dt)
 
 let rec db_to_name (depth : int) (name : Name.t) (dt : t) : t = match dt with
-  | ForAll (Scope dt') -> ForAll (Scope (db_to_name (depth + 1) name dt'))
+  | Bind (Scope dt') -> Bind (Scope (db_to_name (depth + 1) name dt'))
   | Tensor (l, r) -> Tensor (db_to_name depth name l, db_to_name depth name r)
   | Func (m, dt') -> Func (modal_db_to_name depth name m, db_to_name depth name dt')
-  | DQuant (q, Scope dt') -> DQuant (q, Scope (db_to_name (depth + 1) name dt'))
+  | Quant (q, Scope dt') -> Quant (q, Scope (db_to_name (depth + 1) name dt'))
   | Precise p -> Precise (precise_db_to_name depth name p)
   | Base _ -> dt
   | Var v -> Var (Variable.db_to_name depth name v)
@@ -89,9 +89,9 @@ module Make = struct
 
   (* existential quantifier *)
   let exists : (string * t) -> t = function
-    (s, dt) -> DQuant (Quantifier.Exists, abstract (Name.of_string s) dt)
+    (s, dt) -> Quant (Quantifier.Exists, abstract (Name.of_string s) dt)
 
   (* universial quantifier *)
   let forall : (string * t) -> t = function
-    (s, dt) -> DQuant (Quantifier.ForAll, abstract (Name.of_string s) dt)
+    (s, dt) -> Quant (Quantifier.ForAll, abstract (Name.of_string s) dt)
 end
