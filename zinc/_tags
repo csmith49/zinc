@@ -1,3 +1,4 @@
 "src": include
 "src/core": include
 "src/dfuzz": include
+"src/eval": include

@@ -1,3 +1,4 @@
+(* base type information *)
 module Quantifier = struct
   type t =
     | Exists

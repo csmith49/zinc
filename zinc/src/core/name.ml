@@ -28,3 +28,9 @@ let rec is_prefix (short : t) (long : t) : bool =
   else match long with
     | Stack.Empty -> false
     | Stack.Cons (_, ns) -> is_prefix short ns
+
+(* a type for denoting when we need to rename things *)
+type 'a agency = t -> 'a
+
+(* a type indicating a list of names *)
+type prefix = t Stack.t
