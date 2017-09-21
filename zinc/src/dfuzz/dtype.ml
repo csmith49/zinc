@@ -7,17 +7,15 @@ type t =
   | Func of modal * t
   | Tensor of t * t
   | Base of base
-  | Payload of payload
 and precise =
-  | N of Size.t
-  | M of Size.t * t
+  | N of Sensitivity.t
+  | M of Sensitivity.t * t
   | R of Sensitivity.t
 and quantifier =
   | Exists
   | ForAll
 and kind =
   | KSens
-  | KSize
   | KType
 and scope = Sc of t
 and modal = Modal of Sensitivity.t * t
@@ -27,16 +25,13 @@ and base =
   | Bool
   | String
   | Database
-and payload =
-  | PSens of Sensitivity.t
-  | PSize of Size.t
 
 (* mcbride and mckinna *)
 let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Free n' -> if n == n' then (Bound db) else dt
   | Precise p -> begin match p with
-      | N s -> Precise (N (Size.name_to n db s))
-      | M (s, dt') -> Precise (M (Size.name_to n db s, name_to n db dt'))
+      | N s -> Precise (N (Sensitivity.name_to n db s))
+      | M (s, dt') -> Precise (M (Sensitivity.name_to n db s, name_to n db dt'))
       | R s -> Precise (R (Sensitivity.name_to n db s))
   end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (name_to n (db + 1) body))
@@ -44,9 +39,8 @@ let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
       | Modal (s, dom) -> Func (Modal (Sensitivity.name_to n db s, name_to n db dom), name_to n db codom)
   end
   | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
-  | Payload _ -> failwith "can't modify payload in transit"
   | _ -> dt (* catches Base and Bound case *)
-
+(*
 let rec replace (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i == db then img else dt
   | Precise p -> begin match p with
@@ -98,4 +92,4 @@ module Prefix = struct
   let (<@) (n : Name.t) (dt : dtype) : (binding * dtype) option = match dt with
     | Quant (q, k, body) -> Some ((n, q, k), instantiate (Free n) body)
     | _ -> None
-end
+end *)
