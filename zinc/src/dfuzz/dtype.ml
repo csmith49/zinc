@@ -1,101 +1,112 @@
-(* base type *)
-type t =
-  | Free of Name.t
-  | Bound of int
-  | Precise of precise
-  | Quant of quantifier * kind * scope
-  | Func of modal * t
-  | Tensor of t * t
-  | Base of base
-  | Payload of payload
+type t = Dtype
+
+(* we want to be able to say what kind of variables we're storing and where *)
+module P = struct
+  type dtype = DType
+  type size = Size
+  type sens = Sens
+end
+
+type _ expr =
+  | Free : 'a * Name.t -> 'a expr
+  | Bound : 'a * int -> 'a expr
+  (* size constructors *)
+  | Zero : P.size expr
+  | Succ : P.size expr -> P.size expr
+  (* sensitivity constructors *)
+  | Const : Rational.t -> P.sens expr
+  | Size : P.size expr -> P.sens expr
+  | Plus : P.sens expr * P.sens expr -> P.sens expr
+  | Mult : P.sens expr * P.sens expr -> P.sens expr
+  (* dtype constructors *)
+  | Precise : precise -> P.dtype expr
+  | Quant : quantifier * scope -> P.dtype expr
+  | Tensor : P.dtype expr * P.dtype expr -> P.dtype expr
+  | Base : base -> P.dtype expr
 and precise =
-  | N of Size.t
-  | M of Size.t * t
-  | R of Sensitivity.t
+  | N : P.size expr -> precise
+  | M : P.size expr * P.dtype expr -> precise
+  | R : P.sens expr -> precise
+and base =
+  | Real
+  | Int
+  | Bool
+  | Str
+  | DB
+and scope =
+  | Sc : P.dtype expr -> scope
 and quantifier =
   | Exists
   | ForAll
-and kind =
-  | KSens
-  | KSize
-  | KType
-and scope = Sc of t
-and modal = Modal of Sensitivity.t * t
-and base =
-  | Real
-  | Integer
-  | Bool
-  | String
-  | Database
-and payload =
-  | PSens of Sensitivity.t
-  | PSize of Size.t
 
-(* mcbride and mckinna *)
-let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
-  | Free n' -> if n == n' then (Bound db) else dt
-  | Precise p -> begin match p with
-      | N s -> Precise (N (Size.name_to n db s))
-      | M (s, dt') -> Precise (M (Size.name_to n db s, name_to n db dt'))
-      | R s -> Precise (R (Sensitivity.name_to n db s))
-  end
-  | Quant (q, k, Sc body) -> Quant (q, k, Sc (name_to n (db + 1) body))
-  | Func (m, codom) -> begin match m with
-      | Modal (s, dom) -> Func (Modal (Sensitivity.name_to n db s, name_to n db dom), name_to n db codom)
-  end
-  | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
-  | Payload _ -> failwith "can't modify payload in transit"
-  | _ -> dt (* catches Base and Bound case *)
+(* mcbride and mckinna abstraction/instantiation *)
+let rec name_to : type a. Name.t -> int -> a expr -> a expr =
+  fun n db e -> match e with
+    (* variables *)
+    | Free (p, n') -> if n == n' then (Bound (p, db)) else e
+    | Bound _ -> e
+    (* size *)
+    | Zero -> e
+    | Succ s -> Succ (name_to n db s)
+    (* sensitivity *)
+    | Const _ -> e
+    | Size s -> Size (name_to n db s)
+    | Plus (l, r) -> Plus (name_to n db l, name_to n db r)
+    | Mult (l, r) -> Mult (name_to n db l, name_to n db r)
+    (* dtype *)
+    | Precise p -> begin match p with
+        | N s -> Precise (N (name_to n db s))
+        | M (s, dt) -> Precise (M (name_to n db s, name_to n db dt))
+        | R s -> Precise (R (name_to n db s))
+      end
+    | Quant (q, body) -> begin match body with
+        | Sc dt -> Quant (q, Sc (name_to n (db + 1) dt))
+      end
+    | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
+    | Base _ -> e
 
-let rec replace (img : t) (db : int) (dt : t) : t = match dt with
-  | Bound i -> if i == db then img else dt
-  | Precise p -> begin match p with
-      | N s ->
-        let s' = begin match img with
-          | Payload (PSize size) -> Size.replace size db s
-          | _ -> s
-        end in Precise (N s')
-      | M (s, dt') ->
-        let s' = begin match img with
-          | Payload (PSize size) -> Size.replace size db s
-          | _ -> s
-        end in Precise (M (s', replace img db dt'))
-      | R s ->
-        let s' = begin match img with
-          | Payload (PSens sens) -> Sensitivity.replace sens db s
-          | _ -> s
-        end in Precise (R s')
-    end
-  | Quant (q, k, Sc body) -> Quant (q, k, Sc (replace img (db + 1) body))
-  | Func (m, codom) -> begin match m with
-      | Modal (s, dom) ->
-        let s' = begin match img with
-          | Payload (PSens sens) -> Sensitivity.replace sens db s
-          | _ -> s
-        end in Func (Modal (s', replace img db dom), replace img db codom)
-    end
-  | Tensor (l, r) -> Tensor (replace img db l, replace img db r)
-  | Payload _ -> failwith "can't replace payload in transit"
-  | _ -> dt (* catches base and bound case *)
+let rec replace_size : type a. P.size expr -> int -> a expr -> a expr =
+  fun img db e -> match e with
+    | Bound (P.Size, i) -> if i == db then img else body
+    | Succ s -> Succ (replace_size img db s)
+    | Plus (l, r) -> Plus (replace_size img db l, replace_size img db r)
+    | Mult (l, r) -> Mult (replace_size img db l, replace_size img db r)
+    | Precise p -> begin match p with
+        | N s -> Precise (N (replace_size img db s))
+        | M (s, dt) -> Precise (M (replace_size img db s, replace_size img db dt))
+        | R s -> Precise (R (replace_size img db s))
+      end
+    | Quant (q, body) -> begin match body with
+        | Sc dt -> Quant (q, Sc (replace_size img (db + 1) dt))
+      end
+    | Tensor (l, r) -> Tensor (replace_size img db l, replace_size img db r)
+    | _ -> e
 
-(* the payoff *)
-let abstract (n : Name.t) (dt : t) : scope = Sc (name_to n 0 dt)
-let instantiate (img: t) (s : scope) : t = match s with
-  | Sc body -> replace img 0 body
 
-(* submodules will want to refer to this type *)
-type dtype = t
 
-(* prefixs help us maintain binding levels and whatnot *)
-module Prefix = struct
-  (* bindings maintain all the information necessary to reconstruct the binder *)
-  type binding = Name.t * quantifier * kind
-  (* so a prefix maintains a stack of bindings *)
-  type t = binding Stack.t
-  (* infix binding application/inverses *)
-  let (@>) (b : binding) (dt : dtype) : dtype = match b with
-    | (n, q, k) -> Quant (q, k, abstract n dt)
-  let (<@) (n : Name.t) (dt : dtype) : (binding * dtype) option = match dt with
-    | Quant (q, k, body) -> Some ((n, q, k), instantiate (Free n) body)
-    | _ -> None
-end
+
+(*
+let rec replace : type a b. a expr -> int -> b expr -> eexpr =
+  fun img db e -> match e with
+    (* variables *)
+    | Free _ -> E e
+    | Bound i -> if i == db then E img else E e
+    (* size *)
+    | Zero -> E e
+    | Succ s -> E (Succ (replace img db e))
+    (* sensitivity *)
+    | Const _ -> E e
+    | Size s -> E (Size (replace img db e))
+    | Plus (l, r) -> E (Plus (replace img db l, replace img db r))
+    | Mult (l, r) -> E (Mult (replace img db l, replace img db r))
+    (* dtype *)
+    | Precise p -> begin match p with
+        | N s -> E (Precise (N (replace img db s)))
+        | M (s, dt) -> E (Precise (M (replace img db s, replace img db dt)))
+        | R s -> E (Precise (R (replace img db s)))
+      end
+    | Quant (q, body) -> begin match body with
+        | Sc dt -> E (Quant( q, Sc (replace img (db + 1) dt)))
+      end
+    | Tensor (l, r) -> E (Tensor (replace img db l, replace img db r))
+    | Base _ -> E (e) *)
