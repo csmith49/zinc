@@ -24,3 +24,13 @@ let rec replace (img : t) (db : int) (s : t) : t = match s with
   | Mult (l, r) -> Mult (replace img db l, replace img db r)
   | Succ s -> Succ (replace img db s)
   | _ -> s
+
+(* a utility module for simplifying some constructors elsewhere *)
+module Alt = struct
+  (* arithmetic *)
+  let ( +! ) (l : t) (r : t) : t = Plus (l, r)
+  let ( *! ) (l : t) (r : t) : t = Mult (l, r)
+  (* constants *)
+  let z = Zero
+  let s (n : string) : t = Free (Name.of_string n)
+end

@@ -1,5 +1,5 @@
 open CCFun
-open Stack.Infix
+open Stack.Alt
 
 (* string provides readability, int provides uniqueness *)
 type id = Id of string * int
@@ -34,3 +34,9 @@ type 'a agency = t -> 'a
 
 (* a type indicating a list of names *)
 type prefix = t Stack.t
+
+(* simpler syntax *)
+module Alt = struct
+  let ( ++ ) (n : t) (n' : t) : t = n <++ n'
+  let n (s : string) : t = of_string s
+end
