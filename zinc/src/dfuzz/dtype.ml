@@ -82,3 +82,20 @@ let rec replace (img : t) (db : int) (dt : t) : t = match dt with
 let abstract (n : Name.t) (dt : t) : scope = Sc (name_to n 0 dt)
 let instantiate (img: t) (s : scope) : t = match s with
   | Sc body -> replace img 0 body
+
+(* submodules will want to refer to this type *)
+type dtype = t
+
+(* prefixs help us maintain binding levels and whatnot *)
+module Prefix = struct
+  (* bindings maintain all the information necessary to reconstruct the binder *)
+  type binding = Name.t * quantifier * kind
+  (* so a prefix maintains a stack of bindings *)
+  type t = binding Stack.t
+  (* infix binding application/inverses *)
+  let (@>) (b : binding) (dt : dtype) : dtype = match b with
+    | (n, q, k) -> Quant (q, k, abstract n dt)
+  let (<@) (n : Name.t) (dt : dtype) : (binding * dtype) option = match dt with
+    | Quant (q, k, body) -> Some ((n, q, k), instantiate (Free n) body)
+    | _ -> None
+end
