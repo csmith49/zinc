@@ -28,7 +28,7 @@ and base =
 
 (* mcbride and mckinna *)
 let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
-  | Free n' -> if n == n' then (Bound db) else dt
+  | Free n' -> if n = n' then (Bound db) else dt
   | Precise p -> begin match p with
       | N s -> Precise (N (Sensitivity.name_to n db s))
       | M (s, dt') -> Precise (M (Sensitivity.name_to n db s, name_to n db dt'))
@@ -40,6 +40,7 @@ let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
   end
   | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
   | _ -> dt (* catches Base and Bound case *)
+
 (*
 let rec replace (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i == db then img else dt
