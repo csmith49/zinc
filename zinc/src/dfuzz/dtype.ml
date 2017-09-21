@@ -41,6 +41,8 @@ let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
   | _ -> dt (* catches Base and Bound case *)
 
+let abstract (n : Name.t) (dt : t) : scope = Sc (name_to n 0 dt)
+
 let rec replace (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i = db then img else dt
   | Precise p -> begin match p with
@@ -85,4 +87,17 @@ module Prefix = struct
   type binding = Name.t * quantifier * kind
   (* so a prefix maintains a stack of bindings *)
   type t = binding Stack.t
+  (* infix binding applications/inverses *)
+  let (@>) (b : binding) (dt : dtype) : dtype = match b with
+    | (n, q, k) -> Quant (q, k, abstract n dt)
+  let (<@) (n : Name.t) (dt : dtype) : (binding * dtype) option = match dt with
+    | Quant (q, k, body) -> begin match k with
+        | KSens -> Some ((n, q, k), instantiate_sensitivity (Sensitivity.Free n) body)
+        | KType -> Some ((n, q, k), instantiate (Free n) body)
+      end
+    | _ -> None
+  (* which we'll lift to binding over prefixes *)
+  let rec bind (prefix : t) (dt : dtype) : dtype = match prefix with
+    | Stack.Empty -> dt
+    | Stack.Cons (b, ps) -> bind ps (b @> dt)
 end
