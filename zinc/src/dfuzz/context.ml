@@ -56,6 +56,7 @@ let rec support : t -> Name.t list = function
   | Times (_, context) -> support context
   | Empty -> []
 
+(* given a name, we need the type from the context *)
 let rec extract_type (n : Name.t) (c : t) : EModal.t = match c with
   | Concrete (n', em) -> if n = n' then em else zero
   | Symbolic n' -> e (n' ++ n)
@@ -63,4 +64,19 @@ let rec extract_type (n : Name.t) (c : t) : EModal.t = match c with
   | Times (s, c') -> s *? (extract_type n c')
   | Empty -> zero
 
+(* sure, this is just a simple composition, but still *)
 let extract_sensitivity (n : Name.t) (c : t) : Sensitivity.t = EModal.to_sensitivity (extract_type n c)
+
+(* so that we can keep things straight *)
+type relation = Eq of t * t
+
+(* we care about the concrete support of a relation *)
+let relation_support : relation -> Name.t list = function
+  | Eq (l, r) -> (support l) @ (support r)
+
+(* because we love that alternative syntax *)
+module Alt = struct
+  let (<$) (n : Name.t) (c : t) : Sensitivity.t = extract_sensitivity n c
+  let vars : relation -> Name.t list = relation_support
+  let (=$) (l : t) (r : t) : relation = Eq (l, r)
+end

@@ -1,4 +1,4 @@
-open Stack.Alt
+open Context.Alt
 
 (* constraints have two forms - equality, and inequality *)
 type relation =
@@ -6,9 +6,13 @@ type relation =
   | LEq of Sensitivity.t * Sensitivity.t
 
 (* but we maintain a list of these relations as we abduce *)
-type t = relation Stack.t
+type t = relation list
 
-(* an important conversion is contexts to constraints *)
+(* an important conversion is context relations to constraints *)
+let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relation = match rel with
+  | Context.Eq (l, r) -> Eq (n <$ l, n <$ r)
+
+let of_context_relation (rel : Context.relation) : t = CCList.map relation_of_context_relation (vars rel)
 
 (* and at some point we need to convert each to a z3 formula *)
 (*
