@@ -12,7 +12,8 @@ type t = relation list
 let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relation = match rel with
   | Context.Eq (l, r) -> Eq (n <$ l, n <$ r)
 
-let of_context_relation (rel : Context.relation) : t = CCList.map relation_of_context_relation (vars rel)
+let of_context_relation (rel : Context.relation) : t =
+  let f n = relation_of_context_relation n rel in CCList.map f (vars rel)
 
 (* and at some point we need to convert each to a z3 formula *)
 (*
