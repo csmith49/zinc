@@ -13,6 +13,10 @@ let rec concat (l : 'a t) (r : 'a t) : 'a t = match r with
   | Empty -> l
   | Cons (s, ss) -> Cons (s, concat l ss)
 
+let rec size : 'a t -> int = function
+  | Empty -> 0
+  | Cons (_, ss) -> 1 + (size ss)
+
 (* infix functions separated for clarity in importing modules *)
 module Alt = struct
   let (<+) (ss : 'a t) (s : 'a) : 'a t = Cons (s, ss)
