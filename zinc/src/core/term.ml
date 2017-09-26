@@ -5,7 +5,7 @@ type t =
   | Abs of Dtype.t * scope
   | Const of Value.t
   | Prim of string * Value.t
-  | Wild of Name.t * Dtype.t * scope
+  | Wild of Context.t * Dtype.t * scope
 and scope = Sc of t
 
 (* mcbride and mckinna abstraction and instantiation *)
@@ -38,7 +38,7 @@ module Prefix = struct
   (* and bindings maintain a name with the correct domain and binder *)
   type binding =
     | PAbs of Name.t * Dtype.t
-    | PWild of Name.t * Name.t * Dtype.t
+    | PWild of Context.t * Name.t * Dtype.t
   (* so a prefix maintains a stack of bindings *)
   type t = binding Stack.t
   (* infix binding applications/inverses *)
