@@ -8,6 +8,7 @@ let rec eval (p : t) : Value.t = match p with
   end
   | Term.Abs (dom, body) -> let f v = eval (Term.instantiate (Term.Const v) body) in Value.F f
   | Term.Const v -> v
+  | Term.Prim (n, f) -> f
   | _ -> failwith "can't evaluate provided program"
 
 (* so submodules can reference the type *)
@@ -19,7 +20,7 @@ module Stub = struct
   type t = Term.Prefix.t * program
   (* our primary operation is inserting a program into a program that begins with a wild binder *)
   let insert (stub : t) (p : program) : program = match p with
-    | Term.Wild (dom, body) -> begin match stub with
+    | Term.Wild (context, dom, body) -> begin match stub with
         | (prefix, subterm) -> Term.Prefix.bind prefix (Term.instantiate subterm body)
     end
     | _ -> failwith "can't insert a stub at a non-wild binder"

@@ -1,10 +1,11 @@
-type  t =
+type t =
   | Free of Name.t
   | Bound of int
   | App of t * t
   | Abs of Dtype.t * scope
   | Const of Value.t
-  | Wild of Dtype.t * scope
+  | Prim of string * Value.t
+  | Wild of Name.t * Dtype.t * scope
 and scope = Sc of t
 
 (* mcbride and mckinna abstraction and instantiation *)
@@ -12,7 +13,7 @@ let rec name_to (n : Name.t) (db : int) (tm : t) : t = match tm with
   | Free n' -> if n = n' then (Bound db) else tm
   | App (f, args) -> App (name_to n db f, name_to n db args)
   | Abs (dom, Sc body) -> Abs (dom, Sc (name_to n (db + 1) body))
-  | Wild (dom, Sc body) -> Wild (dom, Sc (name_to n (db + 1) body))
+  | Wild (context, dom, Sc body) -> Wild (context, dom, Sc (name_to n (db + 1) body))
   | _ -> tm
 
 let abstract (n : Name.t) (tm : t) : scope = Sc (name_to n 0 tm)
@@ -21,7 +22,7 @@ let rec replace (img : t) (db : int) (body : t) : t = match body with
   | Bound i -> if i = db then img else body
   | App (f, args) -> App (replace img db f, replace img db args)
   | Abs (dom, Sc body) -> Abs (dom, Sc (replace img (db + 1) body))
-  | Wild (dom, Sc body) -> Wild (dom, Sc (replace img (db + 1) body))
+  | Wild (context, dom, Sc body) -> Wild (context, dom, Sc (replace img (db + 1) body))
   | _ -> body
 
 let instantiate (img : t) (s : scope) : t = match s with
@@ -34,22 +35,20 @@ type term = t
 module Prefix = struct
   open Stack.Alt
   (* we have two different kinds of bindings *)
-  type binder =
-    | PAbs
-    | PWild
   (* and bindings maintain a name with the correct domain and binder *)
-  type binding = Name.t * Dtype.t * binder
+  type binding =
+    | PAbs of Name.t * Dtype.t
+    | PWild of Name.t * Name.t * Dtype.t
   (* so a prefix maintains a stack of bindings *)
   type t = binding Stack.t
   (* infix binding applications/inverses *)
   module Alt = struct
     let (@>) (b : binding) (tm : term) : term = match b with
-      | (n, dom, bndr) -> match bndr with
-        | PAbs -> Abs (dom, abstract n tm)
-        | PWild -> Wild (dom, abstract n tm)
+      | PAbs (n, dom) -> Abs (dom, abstract n tm)
+      | PWild (context, n, dom) -> Wild (context, dom, abstract n tm)
     let (<@) (n : Name.t) (tm : term) : (binding * term) option = match tm with
-      | Abs (dom, body) -> Some ((n, dom, PAbs), instantiate (Free n) body)
-      | Wild (dom, body) -> Some ((n, dom, PWild), instantiate (Free n) body)
+      | Abs (dom, body) -> Some (PAbs (n, dom), instantiate (Free n) body)
+      | Wild (context, dom, body) -> Some (PWild (context, n, dom), instantiate (Free n) body)
       | _ -> None
   end
   open Alt
