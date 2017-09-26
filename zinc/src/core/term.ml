@@ -28,6 +28,22 @@ let rec replace (img : t) (db : int) (body : t) : t = match body with
 let instantiate (img : t) (s : scope) : t = match s with
   | Sc body -> replace img 0 body
 
+(* utility functions *)
+let is_variable (n : Name.t) : t -> bool = function
+  | Free n' -> n = n'
+  | _ -> false
+
+(* evaluation only works in restricted cases, but we make sure we only construct progs where it'll work *)
+let rec eval (p : t) : Value.t = match p with
+  | App (f, args) -> begin match (eval f) with
+      | Value.F f' -> f' (eval args)
+      | _ -> failwith "can't apply a non-abstraction"
+    end
+  | Abs (dom, body) -> let f v = eval (instantiate (Const v) body) in Value.F f
+  | Const v -> v
+  | Prim (n, f) -> f
+  | _ -> failwith "can't evaluate provided program"
+
 (* our submodules want to refer to the type while maintaining their own copy of t *)
 type term = t
 
@@ -62,6 +78,12 @@ module Prefix = struct
     | (prefix, tm) -> match (root <+ Name.Id (var, index)) <@ tm with
       | Some (b, tm') -> unbind' root var (index + 1) (prefix <+ b, tm')
       | None -> (prefix, tm)
+  (* filtering and conversion *)
+  let rec program_variables : t -> (Name.t * Dtype.t) list = function
+    | Stack.Empty -> []
+    | Stack.Cons (b, prefix) -> match b with
+      | PAbs (n, d) -> (n, d) :: (program_variables prefix)
+      | _ -> program_variables prefix
 end
 
 (* we use Huet style zippers for unfolding/refolding terms as we expand *)

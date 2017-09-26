@@ -1,7 +1,9 @@
 open Dtype
 
-open Program
+open Term
 
 open Constraint
 
 open Solver
+
+open Search

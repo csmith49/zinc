@@ -39,4 +39,5 @@ type prefix = t Stack.t
 module Alt = struct
   let ( ++ ) (n : t) (n' : t) : t = n <++ n'
   let n (s : string) : t = of_string s
+  let ( <+ ) (n : t) (s : string) = add_string n s
 end
