@@ -1,4 +1,4 @@
-type t = (Value.t, Dtype.t) Term.t
+type t = Term.t
 
 (* evaluation only works in restricted cases, but we make sure we only construct progs where it'll work *)
 let rec eval (p : t) : Value.t = match p with
@@ -16,7 +16,7 @@ type program = t
 (* stubs are what we'll end up replacing wildcards with *)
 module Stub = struct
   (* we maintain a prefix as context and a program with some free variables *)
-  type t = Dtype.t Term.Prefix.t * program
+  type t = Term.Prefix.t * program
   (* our primary operation is inserting a program into a program that begins with a wild binder *)
   let insert (stub : t) (p : program) : program = match p with
     | Term.Wild (dom, body) -> begin match stub with
