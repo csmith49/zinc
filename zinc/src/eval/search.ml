@@ -1,3 +1,5 @@
+let signature : (string * Value.t * Dtype.t) list ref = ref [];
+
 module Stub = struct
   type t = Term.Prefix.t * Term.t
 end
@@ -33,4 +35,7 @@ module Problem = struct
     | (prefix, tm) ->
       let tm' = Term.Zipper.to_term (Term.Zipper.set tm problem.hole) in
       Term.Prefix.bind prefix tm'
+  (* one of the more important bits - how do we solve a problem *)
+  (* we're looking for stubs that, when inserted, yield a type-safe term *)
+  let find_stubs : t -> (Stub.t * Constraint.t) list = fun p -> []
 end
