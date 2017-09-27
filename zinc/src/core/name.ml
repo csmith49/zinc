@@ -35,6 +35,13 @@ type 'a agency = t -> 'a
 (* a type indicating a list of names *)
 type prefix = t Stack.t
 
+(* pair up a list of things with names for each *)
+let rec name_list (root : t) (var : string) (ls : 'a list) : (t * 'a) list =
+  name_list' root var 1 ls
+and name_list' (root : t) (var : string) (index : int) (ls : 'a list) : (t * 'a) list = match ls with
+  | x :: xs -> (root <+ Id (var, index), x) :: (name_list' root var (index + 1) xs)
+  | [] -> []
+
 (* simpler syntax *)
 module Alt = struct
   let ( ++ ) (n : t) (n' : t) : t = n <++ n'

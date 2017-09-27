@@ -17,6 +17,10 @@ let rec size : 'a t -> int = function
   | Empty -> 0
   | Cons (_, ss) -> 1 + (size ss)
 
+let rec of_list : 'a list -> 'a t = function
+  | [] -> Empty
+  | x :: xs -> Cons (x, of_list xs)
+
 (* infix functions separated for clarity in importing modules *)
 module Alt = struct
   let (<+) (ss : 'a t) (s : 'a) : 'a t = Cons (s, ss)
