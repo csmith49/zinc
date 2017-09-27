@@ -7,3 +7,5 @@ open Constraint
 open Solver
 
 open Search
+
+open Signature
