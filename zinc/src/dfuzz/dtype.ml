@@ -101,3 +101,33 @@ module Prefix = struct
     | Stack.Empty -> dt
     | Stack.Cons (b, ps) -> bind ps (b @> dt)
 end
+
+(* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)
+module Alt = struct
+  (* non-sensitive function application *)
+  let (=>) (d : t) (cd : t) : t =
+    Func (Modal (Sensitivity.Const Rational.Infinity, d), cd)
+
+  (* regular function application *)
+  let (-*) (m : modal) (cd : t) : t = Func (m, cd)
+
+  (* tensor construction *)
+  let ( * ) (l : t) (r : t) : t = Tensor (l, r)
+
+  (* some simple base type constructors *)
+  let real : t = Base (Real)
+  let nat : t = Base (Integer)
+
+  (* sensitivity constructor *)
+  let si (p : (int * t)) : modal = match p with
+    | (i, dt) -> Modal (Sensitivity.Const (Rational.of_int i), dt)
+  let s (p : (Sensitivity.t * t)) : modal = match p with
+    | (s, dt) -> Modal (s, dt)
+
+  (* we have a default sens variable *)
+  let k : Sensitivity.t = Sensitivity.Free (Name.of_string "k")
+  (* and a default constructor for binding them *)
+  let exists (p : Sensitivity.t * t) : t = match p with
+    | (Sensitivity.Free name, dt) -> Quant (Exists, KSens, abstract name dt)
+    | _ -> failwith "can't bind over a non-variable"
+end

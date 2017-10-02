@@ -20,6 +20,9 @@ module Decomposition = struct
   and last' (decomp : t) : t = match shift decomp with
     | Some decomp' -> last' decomp'
     | _ -> decomp
+  (* and some accessors, for elsewhere *)
+  let output_type (d : t) : Dtype.t = d.output
+  let input_types (d : t) : Dtype.modal list = d.inputs
 end
 
 module Stub = struct

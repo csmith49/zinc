@@ -9,3 +9,7 @@ open Solver
 open Search
 
 open Signature
+
+open Benchmarks
+
+open Primitives
