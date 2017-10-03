@@ -102,6 +102,59 @@ module Prefix = struct
     | Stack.Cons (b, ps) -> bind ps (b @> dt)
 end
 
+(* printing - this is a real piece of work *)
+let rec to_string : t -> string = fun dt -> to_string' Name.Cycle.dtype Name.Cycle.sensitivity dt
+and to_string' (dts : Name.Cycle.t) (sens : Name.Cycle.t) : t -> string = function
+  | Free n -> Name.to_string n
+  | Bound i -> string_of_int i
+  | Precise p -> begin match p with
+      | N s ->
+        let s' = Sensitivity.to_string s in
+        "N[" ^ s' ^ "]"
+      | M (s, dt) ->
+        let s' = Sensitivity.to_string s in
+        let dt' = to_string' dts sens dt in
+        "M[" ^ s' ^ ", " ^ dt' ^ "]"
+      | R s ->
+        let s' = Sensitivity.to_string s in
+        "R[" ^ s' ^ "]"
+    end
+  | Quant (q, k, body) -> begin match k with
+      | KSens ->
+        let s = Name.Cycle.current sens in
+        let sens' = Name.Cycle.rotate sens in
+        let body' = instantiate_sensitivity (Sensitivity.Free s) body in
+        let q' = quantifier_to_string q in
+        q' ^ (Name.to_string s) ^ "." ^ (to_string' dts sens' body')
+      | KType ->
+        let dt = Name.Cycle.current dts in
+        let dts' = Name.Cycle.rotate dts in
+        let body' = instantiate (Free dt) body in
+        let q' = quantifier_to_string q in
+        q' ^ (Name.to_string dt) ^ "." ^ (to_string' dts' sens body')
+    end
+  | Func (m, dt) -> begin match m with
+      | Modal (s, dt') ->
+        let dom = to_string' dts sens dt' in
+        let codom = to_string' dts sens dt in
+        let s' = Sensitivity.to_string s in
+        dom ^ " -*[" ^ s' ^ "] " ^ codom
+    end
+  | Tensor (l, r) ->
+    let l' = to_string' dts sens l in
+    let r' = to_string' dts sens r in
+    "(" ^ l' ^ ", " ^ r' ^ ")"
+  | Base b -> begin match b with
+      | Real -> "R"
+      | Integer -> "N"
+      | Bool -> "Bool"
+      | String -> "Str"
+      | Database -> "DB"
+    end
+and quantifier_to_string : quantifier -> string = function
+  | Exists -> "E"
+  | ForAll -> "A"
+
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)
 module Alt = struct
   (* non-sensitive function application *)

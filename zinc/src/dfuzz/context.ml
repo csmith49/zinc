@@ -36,6 +36,11 @@ module EModal = struct
     let zero = empty
     let e (n : Name.t) : t = of_name n
   end
+  (* sometimes we'll need to print these *)
+  let rec to_string : t -> string = function
+    | S (s, edt) -> match edt with
+      | Concrete dt -> "![" ^ (Sensitivity.to_string s) ^ "] " ^ (Dtype.to_string dt)
+      | Top -> "T"
 end
 
 (* contexts are represented symbolically as much as possible *)
@@ -80,3 +85,20 @@ module Alt = struct
   let vars : relation -> Name.t list = relation_support
   let (=$) (l : t) (r : t) : relation = Eq (l, r)
 end
+
+(* printing *)
+let rec to_string : t -> string = function
+  | Concrete (n, em) ->
+    let n' = Name.to_string n in
+    let em' = EModal.to_string em in
+    "{" ^ n' ^ " : " ^ em' ^ "}"
+  | Symbolic n -> Name.to_string n
+  | Plus (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    l' ^ " + " ^ r'
+  | Times (s, c) ->
+    let s' = Sensitivity.to_string s in
+    let c' = to_string c in
+    s' ^ " * " ^ c'
+  | Empty -> "{}"

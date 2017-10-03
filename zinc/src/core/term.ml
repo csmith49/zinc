@@ -139,3 +139,34 @@ module Zipper = struct
     | Some z' -> to_term z'
     | _ -> get z
 end
+
+(* printing *)
+module NameMap = CCMap.Make(Name)
+
+let rec to_string : t -> string = fun tm -> to_string' Name.Cycle.abstraction Name.Cycle.wildcard NameMap.empty tm
+and to_string' (abs : Name.Cycle.t) (wilds : Name.Cycle.t) (context : string NameMap.t) : t -> string = function
+  | Free n -> begin match NameMap.get n context with
+      | Some s -> s
+      | None -> Name.to_string n
+    end
+  | Bound i -> string_of_int i
+  | App (l, r) ->
+    let l' = to_string' abs wilds context l in
+    let r' = to_string' abs wilds context r in
+    l' ^ " (" ^ r' ^ ")"
+  | Abs (dt, body) ->
+    let x = Name.Cycle.current abs in
+    let abs' = Name.Cycle.rotate abs in
+    let dt' = Dtype.to_string dt in
+    let body' = instantiate (Free x) body in
+    "\\" ^ (Name.to_string x) ^ " : " ^ dt' ^ "." ^ (to_string' abs' wilds context body')
+  | Const c -> Value.to_string c
+  | Prim (n, _) -> n
+  | Wild (c, dt, body) ->
+    let w = Name.Cycle.current wilds in
+    let wilds' = Name.Cycle.rotate wilds in
+    let dt' = Dtype.to_string dt in
+    let c' = Context.to_string c in
+    let w_rep = "<| " ^ c' ^ " : " ^ dt' ^ " |>" in
+    let context' = NameMap.add w w_rep context in
+    to_string' abs wilds' context' (instantiate (Free w) body)

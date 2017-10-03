@@ -10,7 +10,7 @@ module Basic = struct
   let succ = {
     name = "succ";
     dtype = si (1, real) -* real;
-    source = F (fun v -> match v with
+    source = Value.F (fun v -> match v with
         | Value.Real r -> Value.Real (r +. 1.0)
         | _ -> failwith "can't eval on this type")
   }
@@ -18,7 +18,7 @@ module Basic = struct
   let square = {
     name = "square";
     dtype = real => real;
-    source = F (fun v -> match v with
+    source = Value.F (fun v -> match v with
         | Value.Real r -> Value.Real (r *. r)
         | _ -> failwith "can't eval on this type")
   }
@@ -26,7 +26,7 @@ module Basic = struct
   let double = {
     name = "double";
     dtype = si (2, real) -* real;
-    source = F (fun v -> match v with
+    source = Value.F (fun v -> match v with
         | Value.Real r -> Value.Real (r *. 2.0)
         | _ -> failwith "can't eval on this type")
   }

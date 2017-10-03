@@ -34,3 +34,19 @@ module Alt = struct
   let z = Zero
   let s (n : string) : t = Free (Name.of_string n)
 end
+
+(* printing *)
+let rec to_string : t -> string = function
+  | Free n -> Name.to_string n
+  | Bound i -> string_of_int i
+  | Const q -> Rational.to_string q
+  | Plus (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    l' ^ " + " ^ r'
+  | Mult (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    l' ^ " * " ^ r'
+  | Zero -> "0"
+  | Succ s -> (to_string s) ^ " + 1"

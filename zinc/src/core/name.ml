@@ -18,8 +18,13 @@ let add_string (n : t) (s : string) : t =
 (* we can make names simply from strings using above *)
 let of_string (s : string) : t = add_string Stack.Empty s
 
-(* there's many ways to write these out - we go for a non-unique, readable presentation *)
-let to_string : t -> string = fst % Stack.hd
+(* there's many ways to write these out - we go for a readable presentation *)
+let to_string : t -> string = fun n -> match Stack.hd n with
+  | Id (s, i) ->
+    if i < 5 then
+      s ^ (CCString.repeat "\'" i)
+    else
+      s ^ "_" ^ (string_of_int i)
 
 (* our comparisons deal with prefixes *)
 let rec is_prefix (short : t) (long : t) : bool =
@@ -47,4 +52,31 @@ module Alt = struct
   let ( ++ ) (n : t) (n' : t) : t = n <++ n'
   let n (s : string) : t = of_string s
   let ( <+ ) (n : t) (s : string) = add_string n s
+end
+
+(* for submodules *)
+type name = t
+let compare = Pervasives.compare
+
+(* naming cycles *)
+module Cycle = struct
+  type t = Cycle of string list * int * int
+  (* creating new from list *)
+  let of_list : string list -> t = fun ns -> Cycle (ns, 0, 0)
+  (* getting the current *)
+  let current : t -> name = function
+    | Cycle (ns, loop, index) -> Stack.Empty <+ Id (CCList.nth ns index, loop)
+  (* and moving *)
+  let rotate : t -> t = function
+    | Cycle (ns, loop, index) ->
+      let index' = index + 1 in
+      if index' >= (CCList.length ns) then
+        Cycle (ns, loop + 1, 0)
+      else
+        Cycle (ns, loop, index')
+  (* some defaults we like *)
+  let sensitivity = of_list ["k";"s";"t";"p";"q"]
+  let abstraction = of_list ["x";"y";"z";"f";"g"]
+  let dtype = of_list ["a";"b";"c";"d";"e"]
+  let wildcard = of_list ["w"]
 end
