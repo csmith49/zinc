@@ -20,12 +20,12 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
 
 let benchmark = extract_benchmark !benchmark_name Benchmark.basic;;
 
-open Name.Alt
-
 let wild = Name.of_string "wild";;
 let start = Term.Wild (
     Context.Empty,
     benchmark.Benchmark.goal_type,
     Term.abstract wild (Term.Free wild));;
 
-print_endline (Term.to_string start)
+while true do
+  print_endline (Term.to_string start)
+done

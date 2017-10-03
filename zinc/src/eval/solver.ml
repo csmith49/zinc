@@ -35,6 +35,9 @@ module Make = struct
   let leq (l : expr) (r : expr) : expr = Arithmetic.mk_le context l r
   let geq (l : expr) (r : expr) : expr = Arithmetic.mk_ge context l r
   let eq (l : expr) (r : expr) : expr = conjoin (leq l r) (geq l r)
+
+  (* an empty expression - just true *)
+  let empty : expr = Boolean.mk_true context
 end
 
 (* conversion between our different data types *)
