@@ -43,7 +43,7 @@ open Name.Alt
 (* generating stubs from the provided synthesis info *)
 let gen_stub (root : Name.t) (c : Context.t) (decomp : Decomposition.t) (prim : primitive) : Stub.t * (Context.relation option) =
   (* let's get some naming going on *)
-  let inputs = Name.name_list root "input" decomp.inputs in
+  let inputs = Name.name_list root "input" decomp.Decomposition.inputs in
   (* wildcard construction is straightforward, just project and wrap as a Free *)
   let wildcards = CCList.map (fun ni -> Term.Free ((fst ni) <+ "variable")) inputs in
   (* bindings require contexts *)
