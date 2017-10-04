@@ -1,4 +1,4 @@
-open Primitives
+(* open Primitives
 
 (* references for command line arguments *)
 let benchmark_name = ref "";;
@@ -28,4 +28,6 @@ let start = Term.Wild (
 
 while true do
   print_endline (Term.to_string start)
-done
+done *)
+
+open Fterm

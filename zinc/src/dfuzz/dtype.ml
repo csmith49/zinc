@@ -27,56 +27,54 @@ and base =
   | Database
 
 (* mcbride and mckinna *)
-let rec name_to (n : Name.t) (db : int) (dt : t) : t = match dt with
+let rec abstract (n : Name.t) (dt : t) : scope = Sc (abstract' n 0 dt)
+and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Free n' -> if n = n' then (Bound db) else dt
   | Precise p -> begin match p with
-      | N s -> Precise (N (Sensitivity.name_to n db s))
-      | M (s, dt') -> Precise (M (Sensitivity.name_to n db s, name_to n db dt'))
-      | R s -> Precise (R (Sensitivity.name_to n db s))
-  end
-  | Quant (q, k, Sc body) -> Quant (q, k, Sc (name_to n (db + 1) body))
+      | N s -> Precise (N (Sensitivity.abstract' n db s))
+      | M (s, dt') -> Precise (M (Sensitivity.abstract' n db s, abstract' n db dt'))
+      | R s -> Precise (R (Sensitivity.abstract' n db s))
+    end
+  | Quant (q, k, Sc body) -> Quant (q, k, Sc (abstract' n (db + 1) body))
   | Func (m, codom) -> begin match m with
-      | Modal (s, dom) -> Func (Modal (Sensitivity.name_to n db s, name_to n db dom), name_to n db codom)
-  end
-  | Tensor (l, r) -> Tensor (name_to n db l, name_to n db r)
+      | Modal (s, dom) -> Func (Modal (Sensitivity.abstract' n db s, abstract' n db dom), abstract' n db codom)
+    end
+  | Tensor (l, r) -> Tensor (abstract' n db l, abstract' n db r)
   | _ -> dt (* catches Base and Bound case *)
 
-let abstract (n : Name.t) (dt : t) : scope = Sc (name_to n 0 dt)
-
-let rec replace (img : t) (db : int) (dt : t) : t = match dt with
+let rec instantiate (img : t) (s : scope) : t = match s with
+  | Sc body -> instantiate' img 0 body
+and instantiate' (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i = db then img else dt
   | Precise p -> begin match p with
-      | M (s, dt') -> Precise (M (s, replace img db dt'))
+      | M (s, dt') -> Precise (M (s, instantiate' img db dt'))
       | _ -> Precise p
     end
-  | Quant (q, k, Sc body) -> Quant (q, k, Sc (replace img (db + 1) body))
+  | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate' img (db + 1) body))
   | Func (m, codom) -> begin match m with
-      | Modal (s, dom) -> Func (Modal (s, replace img db dom), replace img db codom)
+      | Modal (s, dom) -> Func (Modal (s, instantiate' img db dom), instantiate' img db codom)
     end
-  | Tensor (l, r) -> Tensor (replace img db l, replace img db r)
+  | Tensor (l, r) -> Tensor (instantiate' img db l, instantiate' img db r)
   | _ -> dt
 
-let rec replace_sensitivity (img : Sensitivity.t) (db : int) (dt : t) : t = match dt with
+let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
+  | Sc body -> instantiate_sens' img 0 body
+and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt with
   | Precise p -> begin match p with
-      | N s -> Precise (N (Sensitivity.replace img db s))
-      | M (s, dt') -> Precise (M (Sensitivity.replace img db s, dt'))
-      | R s -> Precise (R (Sensitivity.replace img db s))
+      | N s -> Precise (N (Sensitivity.instantiate' img db s))
+      | M (s, dt') -> Precise (M (Sensitivity.instantiate' img db s, dt'))
+      | R s -> Precise (R (Sensitivity.instantiate' img db s))
     end
-  | Quant (q, k, Sc body) -> Quant (q, k, Sc (replace_sensitivity img (db + 1) body))
+  | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate_sens' img (db + 1) body))
   | Func (m, codom) -> begin match m with
       | Modal (s, dom) ->
-        let dom' = replace_sensitivity img db dom in
-        let codom' = replace_sensitivity img db codom in
-        Func (Modal (Sensitivity.replace img db s, dom'), codom')
+        let dom' = instantiate_sens' img db dom in
+        let codom' = instantiate_sens' img db codom in
+        Func (Modal (Sensitivity.instantiate' img db s, dom'), codom')
     end
-  | Tensor (l, r) -> Tensor (replace_sensitivity img db l, replace_sensitivity img db r)
+  | Tensor (l, r) -> Tensor (instantiate_sens' img db l, instantiate_sens' img db r)
   | _ -> dt
 
-let instantiate (img : t) (s : scope) : t = match s with
-  | Sc body -> replace img 0 body
-
-let instantiate_sensitivity (img : Sensitivity.t) (s : scope) : t = match s with
-  | Sc body -> replace_sensitivity img 0 body
 
 (* submodules will want to refer to this type *)
 type dtype = t
@@ -92,7 +90,7 @@ module Prefix = struct
     | (n, q, k) -> Quant (q, k, abstract n dt)
   let (<@) (n : Name.t) (dt : dtype) : (binding * dtype) option = match dt with
     | Quant (q, k, body) -> begin match k with
-        | KSens -> Some ((n, q, k), instantiate_sensitivity (Sensitivity.Free n) body)
+        | KSens -> Some ((n, q, k), instantiate_sens (Sensitivity.Free n) body)
         | KType -> Some ((n, q, k), instantiate (Free n) body)
       end
     | _ -> None
@@ -123,7 +121,7 @@ and to_string' (dts : Name.Cycle.t) (sens : Name.Cycle.t) : t -> string = functi
       | KSens ->
         let s = Name.Cycle.current sens in
         let sens' = Name.Cycle.rotate sens in
-        let body' = instantiate_sensitivity (Sensitivity.Free s) body in
+        let body' = instantiate_sens (Sensitivity.Free s) body in
         let q' = quantifier_to_string q in
         q' ^ (Name.to_string s) ^ "." ^ (to_string' dts sens' body')
       | KType ->
