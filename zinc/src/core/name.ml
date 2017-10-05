@@ -59,29 +59,6 @@ type name = t
 let compare = Pervasives.compare
 
 (* naming cycles *)
-module Cycle = struct
-  type t = Cycle of string list * int * int
-  (* creating new from list *)
-  let of_list : string list -> t = fun ns -> Cycle (ns, 0, 0)
-  (* getting the current *)
-  let current : t -> name = function
-    | Cycle (ns, loop, index) -> Stack.Empty <+ Id (CCList.nth ns index, loop)
-  (* and moving *)
-  let rotate : t -> t = function
-    | Cycle (ns, loop, index) ->
-      let index' = index + 1 in
-      if index' >= (CCList.length ns) then
-        Cycle (ns, loop + 1, 0)
-      else
-        Cycle (ns, loop, index')
-  (* some defaults we like *)
-  let sensitivity = of_list ["k";"s";"t";"p";"q"]
-  let abstraction = of_list ["x";"y";"z";"f";"g"]
-  let dtype = of_list ["a";"b";"c";"d";"e"]
-  let wildcard = of_list ["w"]
-end
-
-
 module Stream = struct
   (* cycles maintain a list of variable symbols, and warp around whenever we use too many *)
   module Cycle = struct
