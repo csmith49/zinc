@@ -69,10 +69,10 @@ module Stream = struct
     }
     (* pulling a new symbol just means we have to update the pointers *)
     let draw : t -> id * t = fun c ->
-      let wrapped = (c.index + 1) >= (CCList.length c.symbols) in
-      let index' = if wrapped then c.index + 1 else 0 in
-      let loop' = if wrapped then c.loop_counter + 1 else c.loop_counter in
-      (Id (CCList.nth c.symbols index', loop') , {c with index = index'; loop_counter = loop'})
+      let wrapped = c.index >= (CCList.length c.symbols) in
+      let i = if wrapped then 0 else c.index in
+      let loop = if wrapped then c.loop_counter + 1 else c.loop_counter in
+      (Id (CCList.nth c.symbols i, loop) , {c with index = i; loop_counter = loop})
     (* base construction just takes a symbol list *)
     let of_list : string list -> t = fun ss -> {symbols = ss; index = 0; loop_counter = 0}
   end

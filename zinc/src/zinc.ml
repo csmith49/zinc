@@ -1,4 +1,4 @@
-(* open Primitives
+open Primitives
 
 (* references for command line arguments *)
 let benchmark_name = ref "";;
@@ -21,13 +21,9 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
 let benchmark = extract_benchmark !benchmark_name Benchmark.basic;;
 
 let wild = Name.of_string "wild";;
-let start = Term.Wild (
+let start = Fterm.Wild (
     Context.Empty,
     benchmark.Benchmark.goal_type,
-    Term.abstract wild (Term.Free wild));;
+    Fterm.abstract wild (Fterm.Free wild));;
 
-while true do
-  print_endline (Term.to_string start)
-done *)
-
-open Fterm
+print_endline (Fterm.to_string start)

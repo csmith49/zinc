@@ -26,7 +26,7 @@ module Decomposition = struct
 end
 
 module Stub = struct
-  type t = Term.Prefix.t * Term.t
+  type t = Fterm.Prefix.t * Fterm.t
 end
 
 (* primitives represent the funtions we're actually synthesizing over *)
@@ -36,7 +36,7 @@ type primitive = {
   source : Value.t;
 }
 
-let to_term (prim : primitive) : Term.t = Term.Prim (prim.name, prim.source)
+let to_fterm (prim : primitive) : Fterm.t = Fterm.Prim (prim.name, prim.source)
 
 open Name.Alt
 
@@ -45,20 +45,20 @@ let gen_stub (root : Name.t) (c : Context.t) (decomp : Decomposition.t) (prim : 
   (* let's get some naming going on *)
   let inputs = Name.name_list root "input" decomp.Decomposition.inputs in
   (* wildcard construction is straightforward, just project and wrap as a Free *)
-  let wildcards = CCList.map (fun ni -> Term.Free ((fst ni) <+ "variable")) inputs in
+  let wildcards = CCList.map (fun ni -> Fterm.Free ((fst ni) <+ "variable")) inputs in
   (* bindings require contexts *)
   let bindings = CCList.map (fun ni -> match ni with
       | (n, Dtype.Modal (s, dt)) ->
         let context = Context.Symbolic (n <+ "context") in
-        Term.Prefix.PWild (context, n <+ "variable", dt))
+        Fterm.Prefix.BWild (n <+ "variable", context, dt))
       inputs in
   let prefix = Stack.of_list bindings in
   (* constructor wrapper for the cata to come *)
-  let mk_app l r = Term.App (l, r) in
+  let mk_app l r = Fterm.App (l, r) in
   (* our base node, constructed from a primitive *)
-  let f = to_term prim in
+  let f = to_fterm prim in
   (* term constructor *)
-  let term = CCList.fold_left mk_app f wildcards in
+  let fterm = CCList.fold_left mk_app f wildcards in
   (* now we hvae to construct the context relation *)
   let scaled_contexts = CCList.map (fun ni -> match ni with
       | (n, Dtype.Modal (s, dt)) ->
@@ -68,4 +68,4 @@ let gen_stub (root : Name.t) (c : Context.t) (decomp : Decomposition.t) (prim : 
   let relation = match scaled_contexts with
     | [] -> None
     | ls -> Some (Context.Eq (c, CCList.fold_left mk_add (CCList.hd ls) (CCList.tl ls))) in
-  ((prefix, term), relation)
+  ((prefix, fterm), relation)
