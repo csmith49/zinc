@@ -53,8 +53,11 @@ let rec expr_of_sensitivity : Sensitivity.t -> expr = function
 let expr_of_relation : Constraint.relation -> expr = function
   | Constraint.LEq (l, r) -> Make.leq (expr_of_sensitivity l) (expr_of_sensitivity r)
   | Constraint.Eq (l, r) -> Make.eq (expr_of_sensitivity l) (expr_of_sensitivity r)
+  | Constraint.Empty -> Make.empty
 
-let expr_of_constraint : Constraint.t -> expr = Make.conjoin_list % (CCList.map expr_of_relation)
+let expr_of_constraint : Constraint.t -> expr option = function
+  | Some cons -> Make.conjoin_list $ CCList.map expr_of_relation cons
+  | None -> None
 
 (* TODO : make sure that all rational variables are bounded by the constants of infinity and zero *)
 

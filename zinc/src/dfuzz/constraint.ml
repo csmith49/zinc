@@ -4,22 +4,22 @@ open Context.Alt
 type relation =
   | Eq of Sensitivity.t * Sensitivity.t
   | LEq of Sensitivity.t * Sensitivity.t
+  | Empty
 
 (* but we maintain a list of these relations as we abduce *)
-type t = relation list
+type t = relation list option
 
 (* an important conversion is context relations to constraints *)
 let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relation = match rel with
   | Context.Eq (l, r) -> Eq (n <$ l, n <$ r)
 
 let of_context_relation (rel : Context.relation) : t =
-  let f n = relation_of_context_relation n rel in CCList.map f (vars rel)
+  let f n = relation_of_context_relation n rel in Some (CCList.map f (vars rel))
 
-(* and at some point we need to convert each to a z3 formula *)
-(*
-let rec to_z3 : t -> z3 = function
-  | Empty -> z3.true
-  | Cons (r, rs) ->
-    let r' = relation_to_z3 r in
-    z3.and r' (to_z3 rs)
-*)
+(* alternative construction syntax *)
+module Alt = struct
+  let top : t =  Some [Empty]
+  let (==) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Some [Eq (s, s')]
+  let (<=) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Some [LEq (s, s')]
+  let (&) (l : t) (r : t) : t = CCOpt.map2 (@) l r
+end
