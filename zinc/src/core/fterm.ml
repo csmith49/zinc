@@ -223,3 +223,45 @@ module Zipper = struct
     | Some z' -> to_term z'
     | _ -> get z
 end
+
+(* printing *)
+let rec to_string : t -> string =
+  fun tm ->
+    let stream = Name.Stream.of_root Stack.Empty in
+    fst (to_string' tm stream)
+and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm with
+  | Free n -> (Name.to_string n, s)
+  | Bound i -> (string_of_int i, s)
+  | Abs (dt, body) ->
+    let x, s' = Name.Stream.draw_abs s in
+    let dt', s'' = Dtype.to_string' dt s' in
+    let body', s''' = to_string' (instantiate (Free x) body) s'' in
+    ("\\" ^ (Name.to_string x) ^ ":" ^ dt' ^ "." ^ body', s''')
+  | App (l, r) ->
+    let l', s' = to_string' l s in
+    let r', s'' = to_string' r s' in
+    (l' ^ " (" ^ r' ^ ")", s'')
+  | TyAbs body ->
+    let a, s' = Name.Stream.draw_dt s in
+    let body', s'' = to_string' (instantiate_dtype (Dtype.Free a) body) s' in
+    ("\\" ^ (Name.to_string a) ^ "." ^ body', s'')
+  | TyApp (f, dt) ->
+    let f', s' = to_string' f s in
+    let dt', s'' = Dtype.to_string' dt s' in
+    (f' ^ " [" ^ dt' ^ "]", s'')
+  | SensAbs body ->
+    let k, s' = Name.Stream.draw_sens s in
+    let body', s'' = to_string' (instantiate_sens (Sensitivity.Free k) body) s' in
+    ("\\" ^ (Name.to_string k) ^ "." ^ body', s'')
+  | SensApp (f, sens) ->
+    let f', s' = to_string' f s in
+    let sens' = Sensitivity.to_string sens in
+    (f' ^ " [" ^ sens' ^ "]", s')
+  | Const c -> (Value.to_string c, s)
+  | Prim (n, src) -> (n, s)
+  | Wild (context, dom, body) ->
+    let w, s' = Name.Stream.draw_wild s in
+    let context' = Context.to_string context in
+    let dt', s'' = Dtype.to_string' dom s' in
+    let body', s''' = to_string' (instantiate (Free w) body) s'' in
+    ("\\" ^ (Name.to_string w) ^ ":<" ^ dt' ^ ", " ^ context' ^ ">." ^ body', s''')

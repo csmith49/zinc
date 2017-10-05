@@ -80,3 +80,52 @@ module Cycle = struct
   let dtype = of_list ["a";"b";"c";"d";"e"]
   let wildcard = of_list ["w"]
 end
+
+
+module Stream = struct
+  (* cycles maintain a list of variable symbols, and warp around whenever we use too many *)
+  module Cycle = struct
+    type t = {
+      symbols : string list;
+      index : int;
+      loop_counter : int;
+    }
+    (* pulling a new symbol just means we have to update the pointers *)
+    let draw : t -> id * t = fun c ->
+      let wrapped = (c.index + 1) >= (CCList.length c.symbols) in
+      let index' = if wrapped then c.index + 1 else 0 in
+      let loop' = if wrapped then c.loop_counter + 1 else c.loop_counter in
+      (Id (CCList.nth c.symbols index', loop') , {c with index = index'; loop_counter = loop'})
+    (* base construction just takes a symbol list *)
+    let of_list : string list -> t = fun ss -> {symbols = ss; index = 0; loop_counter = 0}
+  end
+  (* a stream maintains a separate cycle for each of the kinds of variables we have floating around *)
+  type t = {
+    root : name;
+    abs_symbols : Cycle.t;
+    wild_symbols : Cycle.t;
+    sens_symbols : Cycle.t;
+    dt_symbols : Cycle.t;
+  }
+  (* drawing a different kind of symbol needs a different kind of function *)
+  let draw_abs : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.abs_symbols in
+    (s.root <+ n, {s with abs_symbols = c'})
+  let draw_wild : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.wild_symbols in
+    (s.root <+ n, {s with wild_symbols = c'})
+  let draw_sens : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.sens_symbols in
+    (s.root <+ n, {s with sens_symbols = c'})
+  let draw_dt : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.dt_symbols in
+    (s.root <+ n, {s with dt_symbols = c'})
+(* simplest constructor just takes in a root *)
+  let of_root : name -> t = fun r -> {
+      root = r;
+      abs_symbols = Cycle.of_list ["x";"y";"z"];
+      wild_symbols = Cycle.of_list ["w"];
+      sens_symbols = Cycle.of_list ["s";"k";"t"];
+      dt_symbols = Cycle.of_list ["a";"b";"c"];
+  }
+end

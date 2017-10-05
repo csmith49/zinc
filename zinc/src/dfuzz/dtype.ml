@@ -101,53 +101,52 @@ module Prefix = struct
 end
 
 (* printing - this is a real piece of work *)
-let rec to_string : t -> string = fun dt -> to_string' Name.Cycle.dtype Name.Cycle.sensitivity dt
-and to_string' (dts : Name.Cycle.t) (sens : Name.Cycle.t) : t -> string = function
-  | Free n -> Name.to_string n
-  | Bound i -> string_of_int i
+let rec to_string : t -> string =
+  fun dt ->
+    let stream = Name.Stream.of_root Stack.Empty in
+    fst (to_string' dt stream)
+and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt with
+  | Free n -> (Name.to_string n, s)
+  | Bound i -> (string_of_int i, s)
   | Precise p -> begin match p with
-      | N s ->
-        let s' = Sensitivity.to_string s in
-        "N[" ^ s' ^ "]"
-      | M (s, dt) ->
-        let s' = Sensitivity.to_string s in
-        let dt' = to_string' dts sens dt in
-        "M[" ^ s' ^ ", " ^ dt' ^ "]"
-      | R s ->
-        let s' = Sensitivity.to_string s in
-        "R[" ^ s' ^ "]"
+      | N sens ->
+        let sens' = Sensitivity.to_string sens in
+        ("N[" ^ sens' ^ "]", s)
+      | M (sens, dt') ->
+        let sens' = Sensitivity.to_string sens in
+        let dt'', s' = to_string' dt' s in
+        ("M[" ^ sens' ^ ", " ^ dt'' ^ "]", s')
+      | R sens ->
+        let sens' = Sensitivity.to_string sens in
+        ("R[" ^ sens' ^ "]", s)
     end
-  | Quant (q, k, body) -> begin match k with
+  | Quant (q, kind, body) -> begin match kind with
       | KSens ->
-        let s = Name.Cycle.current sens in
-        let sens' = Name.Cycle.rotate sens in
-        let body' = instantiate_sens (Sensitivity.Free s) body in
-        let q' = quantifier_to_string q in
-        q' ^ (Name.to_string s) ^ "." ^ (to_string' dts sens' body')
+        let k, s' = Name.Stream.draw_sens s in
+        let body', s'' = to_string' (instantiate_sens (Sensitivity.Free k) body) s' in
+        ((quantifier_to_string q) ^ "." ^ body', s'')
       | KType ->
-        let dt = Name.Cycle.current dts in
-        let dts' = Name.Cycle.rotate dts in
-        let body' = instantiate (Free dt) body in
-        let q' = quantifier_to_string q in
-        q' ^ (Name.to_string dt) ^ "." ^ (to_string' dts' sens body')
+        let a, s' = Name.Stream.draw_dt s in
+        let body', s'' = to_string' (instantiate (Free a) body) s' in
+        ((quantifier_to_string q) ^ "." ^ body', s'')
     end
-  | Func (m, dt) -> begin match m with
-      | Modal (s, dt') ->
-        let dom = to_string' dts sens dt' in
-        let codom = to_string' dts sens dt in
-        let s' = Sensitivity.to_string s in
-        dom ^ " -*[" ^ s' ^ "] " ^ codom
+  | Func (m, codom) -> begin match m with
+      | Modal (sens, dom) ->
+        let sens' = Sensitivity.to_string sens in
+        let dom', s' = to_string' dom s in
+        let codom', s'' = to_string' codom s' in
+        (dom' ^ " -*[" ^ sens' ^ "] " ^ codom', s'')
     end
   | Tensor (l, r) ->
-    let l' = to_string' dts sens l in
-    let r' = to_string' dts sens r in
-    "(" ^ l' ^ ", " ^ r' ^ ")"
+    let l', s' = to_string' l s in
+    let r', s'' = to_string' r s' in
+    ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
   | Base b -> begin match b with
-      | Real -> "R"
-      | Integer -> "N"
-      | Bool -> "Bool"
-      | String -> "Str"
-      | Database -> "DB"
+      | Real -> ("R", s)
+      | Integer -> ("N", s)
+      | Bool -> ("2", s)
+      | String -> ("Str", s)
+      | Database -> ("DB", s)
     end
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "E"
