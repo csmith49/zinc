@@ -1,5 +1,6 @@
 open Primitives
 open Inference
+open Search
 
 (* references for command line arguments *)
 let benchmark_name = ref "";;

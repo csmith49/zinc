@@ -22,4 +22,5 @@ module Alt = struct
   let (==) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Some [Eq (s, s')]
   let (<=) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Some [LEq (s, s')]
   let (&) (l : t) (r : t) : t = CCOpt.map2 (@) l r
+  let unsat : t = None
 end
