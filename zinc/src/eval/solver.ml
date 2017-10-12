@@ -38,6 +38,9 @@ module Make = struct
 
   (* an empty expression - just true *)
   let empty : expr = Boolean.mk_true context
+
+  (* and a failure *)
+  let failure : expr = Boolean.mk_false context
 end
 
 (* conversion between our different data types *)
@@ -53,11 +56,10 @@ let rec expr_of_sensitivity : Sensitivity.t -> expr = function
 let expr_of_relation : Constraint.relation -> expr = function
   | Constraint.LEq (l, r) -> Make.leq (expr_of_sensitivity l) (expr_of_sensitivity r)
   | Constraint.Eq (l, r) -> Make.eq (expr_of_sensitivity l) (expr_of_sensitivity r)
-  | Constraint.Empty -> Make.empty
 
-let expr_of_constraint : Constraint.t -> expr option = function
-  | Constraint.Conjunction cs -> Make.conjoin_list $ CCList.map expr_of_relation cs
-  | Unsat -> None
+let expr_of_constraint : Constraint.t -> expr = function
+  | Constraint.Conjunction cs -> Make.conjoin_list ( Make.empty :: (CCList.map expr_of_relation cs))
+  | Constraint.Unsat -> Make.failure
 
 (* TODO : make sure that all rational variables are bounded by the constants of infinity and zero *)
 
