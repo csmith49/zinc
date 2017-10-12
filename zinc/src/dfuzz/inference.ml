@@ -37,57 +37,102 @@ and subtype_modal (root : Name.t) (bigger : Dtype.modal) (smaller : Dtype.modal)
     (* constrain sensitivities *)
     | Modal (s, dt), Modal (s', dt') -> (subtype root dt dt') & (s' <= s)
 
-(* subtyping that tracks constraints on a single type variable *)
+(* Substitutions - these only substitute over type variables! how convenient! *)
 module Sub = struct
-  (* we either have 0-1 constraints, or there's no solution *)
+  (* we'll need multiple bindings at several points in time *)
+  (* as well as a mechanism for failure *)
+  type m = M of Name.t * Dtype.t
   type t =
-    | S of Dtype.t
-    | Empty
-    | Failure
-  (* we mostly just want to join *)
-  let join (l : t) (r : t) : t = match l, r with
-    | S x, S y when x = y -> S x
-    | Empty, _ -> r
-    | _, Empty -> l
-    | _ -> Failure
-  (* and sometimes we'll apply it to a type *)
-  let apply (n : Name.t) (s : t) (dt : Dtype.t) : Dtype.t = match s with
-    | S a -> Dtype.instantiate a (Dtype.abstract n dt)
-    | _ -> failwith "can't apply an empty/failed substitution"
+    | S of m list
+    | F (* failure *)
+  (* simple constructors *)
+  let single (n : Name.t) (dt : Dtype.t) : t = S [M (n, dt)]
+  let empty : t = S []
+  let failure : t = F
+  (* we construct larger subs by composition *)
+  let compose (first : t) (second : t) : t = match first, second with
+    | S ls, S rs -> S (ls @ rs)
+    | _ -> failure
+  let rec apply (sub : t) (dt : Dtype.t) : Dtype.t = match sub with
+    | S ls -> CCList.fold_left (CCFun.flip apply_m) dt ls
+    | _ -> failwith "can't apply a failed substitution"
+  and apply_m (map : m) (dt : Dtype.t) : Dtype.t = match map with
+    | M (n, img) -> Dtype.instantiate img (Dtype.abstract n dt)
+  (* we'll want to make sure certain variables are avoided appropriately *)
+  let rec avoids (sub : t) (n : Name.t) : bool = match sub with
+    | S ls -> CCList.for_all (fun map -> avoids_m map n) ls
+    | _ -> false
+  and avoids_m (map : m) (n : Name.t) : bool = match map with
+    | M (n', img) -> if n' = n then false else (CCList.mem n (Dtype.free_vars img))
 end
 
-(* a helper function for cleaning up our solutions *)
-let join (l : Constraint.t * Sub.t) (r : Constraint.t * Sub.t) : Constraint.t * Sub.t = match l, r with
-  | (c, s), (c', s') -> (c & c', Sub.join s s')
-
-let failure : Constraint.t * Sub.t = (unsat, Sub.Failure)
-
-(* now subtype while checking for possible substitutions *)
-let rec sub_n_sub (root : Name.t) (var : Name.t) (big : Dtype.t) (small : Dtype.t) : Constraint.t * Sub.t =
-  (* reflexivity check *)
-  if big = small then (top, Sub.Empty) else match (big, small) with
-    (* let's handle the variable case first *)
-    | Free n, _ when n = var -> (top, Sub.S small)
-    (* precise types *)
-    | Precise p, Precise q -> begin match p, q with
-        | N s, N s' -> (s == s', Sub.Empty)
-        | R s, R s' -> (s == s', Sub.Empty)
-        | M (s, dt), M (s', dt') -> join (s == s', Sub.Empty) (sub_n_sub root var dt dt')
-        | _ -> failure
+(* simple matching over particular variables, ala system Implicit F *)
+(* one modification - we assume only one side has the variables we want to find bindings for, but we don't know which *)
+let rec unify (root : Name.t) (vars : Name.t list) (left : Dtype.t) (right : Dtype.t) : Sub.t =
+  if left = right then Sub.empty else match left, right with
+    | Free n, Free m ->
+      if CCList.mem n vars then Sub.failure else Sub.empty
+    | Free n, (_ as r) ->
+      if CCList.mem n vars then Sub.single n r else Sub.failure
+    | (_ as l), Free m ->
+      if CCList.mem m vars then Sub.single m l else Sub.failure
+    | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') when s = s' ->
+      let sub = unify root vars dom dom' in
+      let sub' = unify root vars (Sub.apply sub codom) (Sub.apply sub codom') in
+      Sub.compose sub sub'
+    | Tensor (l, r), Tensor (l', r') ->
+      let sub = unify root vars l l' in
+      let sub' = unify root vars (Sub.apply sub r) (Sub.apply sub r') in
+      Sub.compose sub sub'
+    | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' ->
+      let n = root <+ "UNIFY" in
+      let sub = unify n vars (instantiate (Free n) body) (instantiate (Free n) body') in
+      if Sub.avoids sub n then sub else Sub.failure
+    | Precise p, Precise p' -> begin match p, p' with
+        | N s, N s' when s = s' -> Sub.empty
+        | M (s, dt), M (s', dt') when s = s' -> unify root vars dt dt'
+        | R s, R s' when s = s' -> Sub.empty
+        | _ -> Sub.failure
       end
-    | Func (dom, codom), Func (dom', codom') -> join (sub_n_sub root var codom codom') (sub_n_sub_modal root var dom' dom)
-    | Tensor (l, r), Tensor (l', r') -> join (sub_n_sub root var l l') (sub_n_sub root var r r')
+    | Base b, Base b' when b = b' -> Sub.empty
+    | _ -> Sub.failure
+
+(* this one gets strange - unify assumes all sensitivities are equivalent, and makes no distinction between left and right *)
+(* now let's interleave unify and subtype - pick up constraints on sensitivities instead of assuming equality *)
+let rec subtype_unify (root : Name.t) (vars : Name.t list) (bigger : Dtype.t) (smaller : Dtype.t) : Constraint.t * Sub.t =
+  if bigger = smaller then (top, Sub.empty) else match bigger, smaller with
+    | Free n, Free m ->
+      if CCList.mem n vars then (top, Sub.failure) else (top, Sub.empty)
+    | Free n, (_ as r) ->
+      if CCList.mem n vars then (top, Sub.single n r) else (top, Sub.failure)
+    | (_ as l), Free m ->
+      if CCList.mem m vars then (top, Sub.single m l) else (top, Sub.failure)
+    | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') ->
+      let dom_c, sub = subtype_unify root vars dom' dom in
+      let codom_c, sub' = subtype_unify root vars (Sub.apply sub codom) (Sub.apply sub codom') in
+      (dom_c & codom_c & (s' <= s), Sub.compose sub sub')
+    | Tensor (l, r), Tensor (l', r') ->
+      let left_c, sub = subtype_unify root vars l l' in
+      let right_c, sub' = subtype_unify root vars (Sub.apply sub r) (Sub.apply sub r') in
+      (left_c & right_c, Sub.compose sub sub')
     | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
         | KSens ->
-          let s = root <+ "s" in
-          let sens = Sensitivity.Free s in
-          sub_n_sub s var (instantiate_sens sens body) (instantiate_sens sens body')
+          let n = root <+ "SENS_ST_UNIFY" in
+          let free = Sensitivity.Free n in
+          let c, sub = subtype_unify n vars (instantiate_sens free body) (instantiate_sens free body') in
+          if Sub.avoids sub n then (c, sub) else (c, Sub.failure)
         | KType ->
-          let a = root <+ "a" in
-          let dt = Dtype.Free a in
-          sub_n_sub a var (instantiate dt body) (instantiate dt body')
+          let n = root <+ "DT_ST_UNIFY" in
+          let free = Free n in
+          let c, sub = subtype_unify n vars (instantiate free body) (instantiate free body') in
+          if Sub.avoids sub n then (c, sub) else (c, Sub.failure)
       end
-    | _ -> failure
-and sub_n_sub_modal (root : Name.t) (var : Name.t) (big : Dtype.modal) (small : Dtype.modal) : Constraint.t * Sub.t =
-  if big = small then (top, Sub.Empty) else match big, small with
-    | Modal (s, dt), Modal (s', dt') -> join (sub_n_sub root var dt dt') (s' <= s, Sub.Empty)
+    | Precise p, Precise p' -> begin match p, p' with
+        | N s, N s' -> (s == s', Sub.empty)
+        | M (s, dt), M (s', dt') ->
+          let dt_c, sub = subtype_unify root vars dt dt' in
+          (dt_c & (s == s'), sub)
+        | R s, R s'-> (s == s', Sub.empty)
+        | _ -> (unsat, Sub.failure)
+      end
+    | _ -> (unsat, Sub.failure)

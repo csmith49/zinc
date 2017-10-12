@@ -152,6 +152,19 @@ and quantifier_to_string : quantifier -> string = function
   | Exists -> "E"
   | ForAll -> "A"
 
+(* utility functions for various purposes *)
+let rec free_vars : t -> Name.t list = function
+  | Free n -> [n]
+  | Precise p -> begin match p with
+      | N s -> Sensitivity.free_vars s
+      | M (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
+      | R s -> Sensitivity.free_vars s
+    end
+  | Quant (_, _, Sc body) -> free_vars body
+  | Func (Modal (s, d), c) -> (free_vars d) @ (free_vars c) @ (Sensitivity.free_vars s)
+  | Tensor (l, r) -> (free_vars l) @ (free_vars r)
+  | _ -> []
+
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)
 module Alt = struct
   (* non-sensitive function application *)

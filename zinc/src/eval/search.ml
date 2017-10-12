@@ -2,6 +2,11 @@ let signature : (string * Value.t * Dtype.t) list ref = ref [];
 
 module Stub = struct
   type t = Fterm.Prefix.t * Fterm.t
+  (* simple constructor *)
+  let of_primitive (p : Signature.primitive) : t =
+    let name = p.Signature.name in
+    let source = p.Signature.source in
+    (Stack.Empty, Fterm.Prim (name, source))
 end
 
 module Problem = struct

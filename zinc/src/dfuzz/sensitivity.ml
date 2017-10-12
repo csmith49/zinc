@@ -25,6 +25,14 @@ let rec instantiate' (img : t) (db : int) (s : t) : t = match s with
   | Succ s -> Succ (instantiate' img db s)
   | _ -> s
 
+(* pick up free variables *)
+let rec free_vars : t -> Name.t list = function
+  | Free n -> [n]
+  | Plus (l, r) -> (free_vars l) @ (free_vars r)
+  | Mult (l, r) -> (free_vars l) @ (free_vars r)
+  | Succ s -> free_vars s
+  | _ -> []
+
 (* a utility module for simplifying some constructors elsewhere *)
 module Alt = struct
   (* arithmetic *)
