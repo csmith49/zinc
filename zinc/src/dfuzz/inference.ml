@@ -64,6 +64,22 @@ module Sub = struct
     | _ -> false
   and avoids_m (map : m) (n : Name.t) : bool = match map with
     | M (n', img) -> if n' = n then false else (CCList.mem n (Dtype.free_vars img))
+  (* simple pre-baked pattern matching *)
+  let is_impossible : t -> bool = function
+    | F -> true
+    | _ -> false
+  (* fterm application *)
+  let rec apply_fterm (sub : t) (tm : Fterm.t) : Fterm.t = match tm with
+    | Fterm.Abs (dt, body) -> Fterm.Abs (apply sub dt, apply_sc sub body)
+    | Fterm.App (l, r) -> Fterm.App (apply_fterm sub l, apply_fterm sub r)
+    | Fterm.TyAbs body -> Fterm.TyAbs (apply_sc sub body)
+    | Fterm.TyApp (f, arg) -> Fterm.TyApp (apply_fterm sub f, apply sub arg)
+    | Fterm.SensAbs body -> Fterm.SensAbs (apply_sc sub body)
+    | Fterm.SensApp (f, s) -> Fterm.SensApp (apply_fterm sub f, s)
+    | Fterm.Wild (c, dom, body) -> Fterm.Wild (c, apply sub dom, apply_sc sub body)
+    | _ -> tm
+  and apply_sc (sub : t) : Fterm.scope -> Fterm.scope = function
+    | Fterm.Sc tm -> Fterm.Sc (apply_fterm sub tm)
 end
 
 (* simple matching over particular variables, ala system Implicit F *)

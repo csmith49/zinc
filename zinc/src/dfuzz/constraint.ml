@@ -17,6 +17,10 @@ let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relatio
 let of_context_relation (rel : Context.relation) : t =
   let f = fun n -> relation_of_context_relation n rel in Conjunction (CCList.map f (vars rel))
 
+let is_unsat : t -> bool = function
+  | Unsat -> true
+  | _ -> false
+
 (* alternative construction syntax *)
 module Alt = struct
   let top : t =  Conjunction []
