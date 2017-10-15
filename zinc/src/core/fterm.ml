@@ -224,6 +224,17 @@ module Zipper = struct
     | _ -> get z
 end
 
+(* we need to be able to determine sizes for heuristic purposes *)
+let rec size : t -> int = function
+  | Abs (_, Sc body) -> 1 + (size body)
+  | App (l, r) -> 1 + (size l) + (size r)
+  | TyAbs (Sc body) -> 1 + (size body)
+  | TyApp (f, _) -> 1 + (size f)
+  | SensAbs (Sc body) -> 1 + (size body)
+  | SensApp (f, _) -> 1 + (size f)
+  | Wild (_, _, Sc body) -> 1 + (size body)
+  | _ -> 1
+
 (* printing *)
 let rec to_string : t -> string =
   fun tm ->
