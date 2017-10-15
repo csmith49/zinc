@@ -21,12 +21,13 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
   | b :: bs' -> if b.Benchmark.name = name then b else extract_benchmark name bs'
   | _ -> failwith "can't find provided benchmark";;
 
+(* pull the benchmark from the arguments *)
 let benchmark = extract_benchmark !benchmark_name Benchmark.basic;;
 
-let wild = Name.of_string "wild";;
-let start = Fterm.Wild (
-    Context.Empty,
-    benchmark.Benchmark.goal_type,
-    Fterm.abstract wild (Fterm.Free wild));;
+(* consruct the frontier from the benchmarks start position *)
+module Frontier = Pqueue.Make(Search.Node.Priority);;
 
-print_endline (Fterm.to_string start)
+let start_node = Benchmark.to_node benchmark;;
+let frontier = Frontier.push (Search.Node.to_priority start_node) (start_node) Frontier.empty;;
+
+print_endline (Fterm.to_string start_node.Search.Node.solution)

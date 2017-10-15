@@ -7,11 +7,20 @@ module Node = struct
   }
   (* we'll need some heuristics to guide the search *)
   let size : t -> int = fun n -> Fterm.size n.solution
-  (* now that we can define compare *)
-  let compare (l : t) (r : t) : int =
-    match Pervasives.compare (size l) (size r) with
-    | 0 -> Pervasives.compare l.solution r.solution
-    | (_ as c) -> c
+  (* we do comparisons through priority *)
+  module Priority = struct
+    (* we basically just tuple on size / value *)
+    type t = int * Fterm.t
+    (* comparison is size first *)
+    let compare (l : t) (r : t) : int = match l, r with
+      | (li, lt), (ri, rt) -> match Pervasives.compare li ri with
+        | 0 -> Pervasives.compare lt rt
+        | (_ as c) -> c
+  end
+  (* conversion to priority *)
+  let to_priority : t -> Priority.t = fun n -> (size n, n.solution)
+  (* comparison through priority *)
+  let compare (l : t) (r : t) : int = Priority.compare (to_priority l) (to_priority r)
 end
 
 (* slightly updated *)

@@ -4,7 +4,7 @@ module type PRIORITY = sig
 end
 
 (* this specializes the standard p queue operations for our sig *)
-functor Make (P : PRIORITY) -> struct
+module Make (P : PRIORITY) = struct
   type priority = P.t
   type 'a t =
     | Empty
@@ -16,8 +16,8 @@ functor Make (P : PRIORITY) -> struct
     | Empty -> Node (p, e, Empty, Empty)
     | Node (p', c', left, right) ->
       if (P.compare p p') <= 0
-      then Node (p, e, push right p' c', left)
-      else Node (p', c', push right p e, left)
+      then Node (p, e, push p' c' right, left)
+      else Node (p', c', push p e right, left)
   (* it is possible to fail, but it shouldn't happen often *)
   exception Empty_structure
   (* to get the minimal element, we have to remove the root node *)

@@ -30,4 +30,5 @@ module Alt = struct
     | Conjunction ls, Conjunction rs -> Conjunction (ls @ rs)
     | _ -> Unsat
   let unsat : t = Unsat
+  let num : int -> Sensitivity.t = fun n -> Sensitivity.Const (Rational.of_int n)
 end
