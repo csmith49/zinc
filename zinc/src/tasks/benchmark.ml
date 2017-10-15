@@ -3,7 +3,7 @@ type t = {
   name : string;
   goal_type : Dtype.t;
   io_examples : (Value.t * Value.t) list;
-  search_grammar : Signature.primitive list;
+  search_grammar : Primitive.t list;
 }
 
 (* benchmarks will contain IO examples - we want to verify a solution *)
@@ -18,7 +18,7 @@ let basic_example_01 = {
   name = "basic_01";
   goal_type = s (k, real) -* real;
   io_examples = [(Value.Real 0.0, Value.Real 1.0); (Value.Real 2.0, Value.Real 5.0)];
-  search_grammar = Primitives.Basic.signature;
+  search_grammar = Signature.Basic.signature;
 }
 
 

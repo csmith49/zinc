@@ -1,4 +1,4 @@
-open Primitives
+open Signature
 open Inference
 open Search
 open Solver
