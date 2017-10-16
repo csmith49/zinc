@@ -235,6 +235,17 @@ let rec size : t -> int = function
   | Wild (_, _, Sc body) -> 1 + (size body)
   | _ -> 1
 
+(* utility for checking if there are any wild binders floating around the term *)
+let rec wild_closed : t -> bool = function
+  | Abs (_, Sc body) -> wild_closed body
+  | App (l, r) -> (wild_closed l) && (wild_closed r)
+  | TyAbs (Sc body) -> wild_closed body
+  | TyApp (f, _) -> wild_closed f
+  | SensAbs (Sc body) -> wild_closed body
+  | SensApp (f, _) -> wild_closed f
+  | Wild (_) -> false
+  | _ -> true
+
 (* printing *)
 let rec to_string : t -> string =
   fun tm ->

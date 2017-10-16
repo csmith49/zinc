@@ -1,4 +1,4 @@
-S src
-S src/*
+S src/**
+
 PKG containers Z3
-B _build/*
+B _build/**

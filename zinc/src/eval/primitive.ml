@@ -9,4 +9,5 @@ type t = {
 let to_proposal : t -> Search.Proposal.t = fun p -> {
     Search.Proposal.solution = Fterm.Prim (p.name, p.source);
     Search.Proposal.dtype = p.dtype;
+    Search.Proposal.wildcards = Stack.Empty;
   }

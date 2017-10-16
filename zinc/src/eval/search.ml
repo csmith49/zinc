@@ -23,6 +23,16 @@ module Node = struct
   let compare (l : t) (r : t) : int = Priority.compare (to_priority l) (to_priority r)
 end
 
+(* to make things a little easier *)
+module Proposal = struct
+  type t = {
+    solution : Fterm.t;
+    dtype : Dtype.t;
+    wildcards : Fterm.Prefix.t;
+  }
+end
+
+
 (* slightly updated *)
 module Subproblem = struct
   open Name.Alt
@@ -52,14 +62,20 @@ module Subproblem = struct
         | _ -> failwith "can't construct subproblem without the bound wildcard"
       end
     | _ -> failwith "can't construct subproblem from node without a wildcard"
-end
-
-(* to make things a little easier *)
-module Proposal = struct
-  type t = {
-    solution : Fterm.t;
-    dtype : Dtype.t;
-  }
+  (* pulling variables in scope at the hole *)
+  let variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
+    | (_, prefix, _) ->
+      let bindings = Stack.to_list prefix in
+      let f = fun b -> match b with
+        | Fterm.Prefix.BAbs (n, dt) -> Some (n, dt)
+        | _ -> None
+      in CCList.filter_map f bindings
+  let variable_proposals (sp : t) : Proposal.t list =
+    let f = fun (n, dt) -> {
+      Proposal.solution = Fterm.Free n; 
+      Proposal.dtype = dt;
+      Proposal.wildcards = Stack.Empty
+    } in CCList.map f (variables sp)
 end
 
 (* these make the specialization def a little easier to grok *)
@@ -69,7 +85,7 @@ open Context.Alt
 open Name.Alt
 
 (* the latter two-thirds of the ~> relation *)
-let rec specialize
+let rec specialize'
     (root : Name.t)
     (context : Context.t)
     (proposal : Proposal.t)
@@ -80,7 +96,10 @@ let rec specialize
   if not (Constraint.is_unsat c) && (Inference.Sub.is_impossible sub) then
     Some ({
         Node.obligation = c & sp.Subproblem.obligation;
-        Node.solution = Inference.Sub.apply_fterm sub proposal.Proposal.solution
+        Node.solution = 
+          let tm = Inference.Sub.apply_fterm sub proposal.Proposal.solution in
+          let z = Fterm.Zipper.set tm sp.Subproblem.hole in
+          Fterm.Prefix.bind proposal.Proposal.wildcards (Fterm.Zipper.to_term z);
       })
   else match proposal.Proposal.dtype with
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
@@ -93,9 +112,10 @@ let rec specialize
       let prop = {
         Proposal.solution = binding @> Fterm.App (f, Fterm.Free w);
         Proposal.dtype = codom;
+        Proposal.wildcards = Stack.Cons (binding, proposal.Proposal.wildcards);
       } in
       (* recurse *)
-      specialize (root <+ "step") (Context.Plus (context, Context.Times (s, c))) prop vars sp
+      specialize' (root <+ "step") (Context.Plus (context, Context.Times (s, c))) prop vars sp
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
       let a = root <+ "type" in
       let f = proposal.Proposal.solution in
@@ -103,8 +123,9 @@ let rec specialize
       let prop = {
         Proposal.solution = Fterm.TyApp (f, Dtype.Free a);
         Proposal.dtype = Dtype.instantiate (Dtype.Free a) body;
+        Proposal.wildcards = proposal.Proposal.wildcards;
       } in
-      specialize (root <+ "step") context prop (a :: vars) sp
+      specialize' (root <+ "step") context prop (a :: vars) sp
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KSens ->
       let s = root <+ "sens" in
       let f = proposal.Proposal.solution in
@@ -112,6 +133,8 @@ let rec specialize
       let prop = {
         Proposal.solution = Fterm.SensApp (f, Sensitivity.Free s);
         Proposal.dtype = Dtype.instantiate_sens (Sensitivity.Free s) body;
+        Proposal.wildcards = proposal.Proposal.wildcards;
       } in
-      specialize (root <+ "step") context prop vars sp
+      specialize' (root <+ "step") context prop vars sp
     | _ -> None
+and specialize root proposal sp = specialize' root (Context.Symbolic (root <+ "context")) proposal [] sp

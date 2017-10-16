@@ -32,5 +32,5 @@ module Make (P : PRIORITY) = struct
   (* and the expected interface *)
   let pop : 'a t -> 'a * P.t * 'a t = function
     | Empty -> raise Empty_structure
-    | Node (p, e, _, _) as queue -> (p, e, remove_top queue)
+    | Node (p, e, _, _) as queue -> (e, p, remove_top queue)
 end
