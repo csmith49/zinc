@@ -41,7 +41,10 @@ let synthesize (bm : Benchmark.t) : unit =
   while true do
     (* pull from frontier *)
     let node, p, frontier' = Frontier.pop !frontier in
+    let _ = frontier := frontier' in
     let tm = node.Search.Node.solution in
+    (* PRINTING *)
+    let _ = print_endline (Fterm.to_string tm) in
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
       if (Benchmark.verify tm bm.Benchmark.io_examples) then raise (SynthSuccess tm) else ()
@@ -50,6 +53,7 @@ let synthesize (bm : Benchmark.t) : unit =
       let subproblem = Search.Subproblem.of_node (Name.of_string "w") node in
       let proposals = primitive_proposals @ (Search.Subproblem.variable_proposals subproblem) in
       let root = Name.of_string "specialize" in
+      (* PRINTING *)
       let f = fun p -> Search.specialize root p subproblem in
       let solutions = CCList.filter_map f proposals in
         CCList.iter (fun n -> frontier := Frontier.push (Search.Node.to_priority n) n !frontier) solutions

@@ -213,10 +213,10 @@ module Zipper = struct
   open CCOpt.Infix
   open CCFun
   (* all the things necessary for preorder traversal *)
-  let rec next (z : t ) : t option = (right z) <+> (up z) >>= next
+  let rec next (z : t ) : t option = (right z) <+> ((up z) >>= next)
   let preorder (root : Name.t) (var : string) (z : t) : t option = (down root var z) <+> (next z)
   let rec preorder_until (root : Name.t) (var : string) (predicate : fterm -> bool) (z : t) : t option =
-    (CCOpt.if_ (predicate % get) z) <+> (preorder root var z) >>= (preorder_until root var predicate)
+    (CCOpt.if_ (predicate % get) z) <+> ((preorder root var z) >>= (preorder_until root var predicate))
   (* convert to/from fterms *)
   let of_term : fterm -> t = fun tm -> (tm, Stack.Empty, Stack.Empty)
   let rec to_term : t -> fterm = fun z -> match up z with
