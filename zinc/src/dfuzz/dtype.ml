@@ -142,15 +142,15 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
     let r', s'' = to_string' r s' in
     ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
   | Base b -> begin match b with
-      | Real -> ("R", s)
+      | Real -> ("ℝ", s)
       | Integer -> ("N", s)
       | Bool -> ("2", s)
       | String -> ("Str", s)
       | Database -> ("DB", s)
     end
 and quantifier_to_string : quantifier -> string = function
-  | Exists -> "E"
-  | ForAll -> "A"
+  | Exists -> "∃"
+  | ForAll -> "∀"
 
 (* utility functions for various purposes *)
 let rec free_vars : t -> Name.t list = function

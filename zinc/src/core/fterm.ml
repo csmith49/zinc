@@ -258,7 +258,7 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
     let x, s' = Name.Stream.draw_abs s in
     let dt', s'' = Dtype.to_string' dt s' in
     let body', s''' = to_string' (instantiate (Free x) body) s'' in
-    ("\\" ^ (Name.to_string x) ^ ":" ^ dt' ^ "." ^ body', s''')
+    ("λ" ^ (Name.to_string x) ^ ":" ^ dt' ^ "." ^ body', s''')
   | App (l, r) ->
     let l', s' = to_string' l s in
     let r', s'' = to_string' r s' in
@@ -266,7 +266,7 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
   | TyAbs body ->
     let a, s' = Name.Stream.draw_dt s in
     let body', s'' = to_string' (instantiate_dtype (Dtype.Free a) body) s' in
-    ("\\" ^ (Name.to_string a) ^ "." ^ body', s'')
+    ("Λ" ^ (Name.to_string a) ^ "." ^ body', s'')
   | TyApp (f, dt) ->
     let f', s' = to_string' f s in
     let dt', s'' = Dtype.to_string' dt s' in
@@ -286,4 +286,4 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
     let context' = Context.to_string context in
     let dt', s'' = Dtype.to_string' dom s' in
     let body', s''' = to_string' (instantiate (Free w) body) s'' in
-    ("\\" ^ (Name.to_string w) ^ ":<" ^ dt' ^ ", " ^ context' ^ ">." ^ body', s''')
+    ("\\" ^ (Name.to_string w) ^ ":⟨" ^ dt' ^ ", " ^ context' ^ "⟩." ^ body', s''')

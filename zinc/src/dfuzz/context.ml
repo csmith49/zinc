@@ -104,4 +104,4 @@ let rec to_string : t -> string = function
     let s' = Sensitivity.to_string s in
     let c' = to_string c in
     s' ^ " * " ^ c'
-  | Empty -> "{}"
+  | Empty -> "∅"
