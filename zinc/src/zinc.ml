@@ -55,8 +55,14 @@ let synthesize (bm : Benchmark.t) : unit =
       (* PRINTING *)
       let f = fun p -> Subproblem.specialize root p in
       let solutions = CCList.flat_map f proposals in
-      let steps = CCList.filter_map (fun p -> Subproblem.insert_proposal p subproblem) solutions in
-        CCList.iteri (fun i -> fun n -> 
+      let steps = CCList.filter_map (fun p -> 
+        let _ = print_string ("\tEx: " ^ (Proposal.to_string p) ^ "...") in
+        let ans = Subproblem.insert_proposal p subproblem in
+        let _ = print_endline (if CCOpt.is_some ans then "ok" else "no")
+        in ans) 
+        solutions in
+      
+      CCList.iteri (fun i -> fun n -> 
         frontier := Frontier.push (Node.to_priority n) {n with Node.root = Stack.Cons (Name.Id ("n", i), n.Node.root);} !frontier) steps
   done;;
 
