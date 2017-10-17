@@ -6,8 +6,10 @@ type t = {
 }
 
 (* step one is being able to convert primitives to proposals *)
-let to_proposal : t -> Search.Proposal.t = fun p -> {
-    Search.Proposal.solution = Fterm.Prim (p.name, p.source);
-    Search.Proposal.dtype = p.dtype;
-    Search.Proposal.wildcards = Stack.Empty;
+let to_proposal : t -> Proposal.t = fun p -> {
+    Proposal.solution = Fterm.Prim (p.name, p.source);
+    Proposal.dtype = p.dtype;
+    Proposal.wildcards = Stack.Empty;
+    Proposal.context = Context.Empty;
+    Proposal.variables = [];
   }

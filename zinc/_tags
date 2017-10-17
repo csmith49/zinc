@@ -3,4 +3,5 @@
 "src/dfuzz": include
 "src/eval": include
 "src/tasks": include
+"src/search": include
 true: annot, bin_annot

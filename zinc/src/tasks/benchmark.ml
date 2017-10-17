@@ -11,9 +11,10 @@ open Dtype.Alt
 open Name.Alt
 
 (* to intialize the search, we convert benchmarks to nodes *)
-let to_node : t -> Search.Node.t = fun b -> {
-    Search.Node.obligation = (k <= (num 1));
-    Search.Node.solution =
+let to_node : t -> Node.t = fun b -> {
+    Node.root = Name.of_string "start";
+    Node.obligation = (k <= (num 1));
+    Node.solution =
       let context = Context.Empty in
       let dtype = b.goal_type in
       let root = Name.of_string b.name in

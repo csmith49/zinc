@@ -53,6 +53,9 @@ type t =
 
 open EModal.Alt
 
+let concrete_of_var (n : Name.t) (dt : Dtype.t) : t =
+  Concrete (n, EModal.S (Sensitivity.Const (Rational.of_int 1), EModal.Concrete dt))
+
 (* what names are actually bound in here? *)
 let rec support : t -> Name.t list = function
   | Concrete (n, em) -> [n]
