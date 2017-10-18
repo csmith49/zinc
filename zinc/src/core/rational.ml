@@ -14,6 +14,7 @@ let compare (a : t) (b : t) : int = match a, b with
 let of_int (i : int) : t = Q (i, 1)
 let to_string : t -> string = function
     | Infinity -> "∞"
+    | Q (a, b) when b = 1 -> string_of_int a
     | Q (a, b) -> (string_of_int a) ^ "/" ^ (string_of_int b)
 
 (* and some basic arithmetic *)

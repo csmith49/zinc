@@ -15,6 +15,8 @@ let usage_message = ""
 let anon_function = fun s -> ()
 let _ = Arg.parse (Arg.align spec_list) anon_function usage_message
 
+let _ = print_endline ("Evaluating benchmark: " ^ !benchmark_name)
+
 (* main loop happens here *)
 let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t = match bs with
   | b :: bs' -> if b.Benchmark.name = name then b else extract_benchmark name bs'
@@ -44,10 +46,10 @@ let synthesize (bm : Benchmark.t) : unit =
     let tm = node.Node.solution in
     (* PRINTING *)
     let _ = print_endline ("Checking: " ^ (Fterm.to_string tm)) in
+    let _ = print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) in
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
       let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
-      let _ = print_endline ("\tObligation: " ^ (Constraint.to_string node.Node.obligation)) in
       (* let meets_sens_constraint = Solver.check node.Node.obligation in *)
       if (meets_examples) then raise (SynthSuccess tm) else ()
     (* if not, and there's a wild binder, find all expansions *)
@@ -66,7 +68,7 @@ let synthesize (bm : Benchmark.t) : unit =
         solutions in
       
       CCList.iteri (fun i -> fun n -> 
-        frontier := Frontier.push (Node.to_priority n) {n with Node.root = Stack.Cons (Name.Id ("n", i), n.Node.root);} !frontier) steps
+        frontier := Frontier.push (Node.to_priority n) {n with Node.root = Rlist.Cons (Name.Id ("n", i), n.Node.root);} !frontier) steps
   done;;
 
 (* run the experiment, and catch the output *)

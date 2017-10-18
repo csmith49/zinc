@@ -83,8 +83,8 @@ type dtype = t
 module Prefix = struct
   (* bindings maintain all the information necessary to reconstruct the binder *)
   type binding = Name.t * quantifier * kind
-  (* so a prefix maintains a stack of bindings *)
-  type t = binding Stack.t
+  (* so a prefix maintains a Rlist of bindings *)
+  type t = binding Rlist.t
   (* infix binding applications/inverses *)
   let (@>) (b : binding) (dt : dtype) : dtype = match b with
     | (n, q, k) -> Quant (q, k, abstract n dt)
@@ -96,14 +96,14 @@ module Prefix = struct
     | _ -> None
   (* which we'll lift to binding over prefixes *)
   let rec bind (prefix : t) (dt : dtype) : dtype = match prefix with
-    | Stack.Empty -> dt
-    | Stack.Cons (b, ps) -> bind ps (b @> dt)
+    | Rlist.Empty -> dt
+    | Rlist.Cons (b, ps) -> bind ps (b @> dt)
 end
 
 (* printing - this is a real piece of work *)
 let rec to_string : t -> string =
   fun dt ->
-    let stream = Name.Stream.of_root Stack.Empty in
+    let stream = Name.Stream.of_root Rlist.Empty in
     fst (to_string' dt stream)
 and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt with
   | Free n -> (Name.to_string n, s)

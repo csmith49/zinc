@@ -1,5 +1,5 @@
 open CCFun
-open Stack.Alt
+open Rlist.Alt
 
 (* string provides readability, int provides uniqueness *)
 type id = Id of string * int
@@ -9,17 +9,17 @@ let fst : id -> string = function
   Id (s, _) -> s
 
 (* a name is a history of ids (of agents, contexts, and variables) *)
-type t = id Stack.t
+type t = id Rlist.t
 
 (* when we only have a single entity, the number isn't as important *)
 let add_string (n : t) (s : string) : t =
   n <+ Id (s, 0)
 
 (* we can make names simply from strings using above *)
-let of_string (s : string) : t = add_string Stack.Empty s
+let of_string (s : string) : t = add_string Rlist.Empty s
 
 (* there's many ways to write these out - we go for a readable presentation *)
-let to_string : t -> string = fun n -> match Stack.hd n with
+let to_string : t -> string = fun n -> match Rlist.hd n with
   | Id (s, i) ->
     if i < 5 then
       s ^ (CCString.repeat "\'" i)
@@ -31,14 +31,14 @@ let rec is_prefix (short : t) (long : t) : bool =
   if short == long then
     true
   else match long with
-    | Stack.Empty -> false
-    | Stack.Cons (_, ns) -> is_prefix short ns
+    | Rlist.Empty -> false
+    | Rlist.Cons (_, ns) -> is_prefix short ns
 
 (* a type for denoting when we need to rename things *)
 type 'a agency = t -> 'a
 
 (* a type indicating a list of names *)
-type prefix = t Stack.t
+type prefix = t Rlist.t
 
 (* pair up a list of things with names for each *)
 let rec name_list (root : t) (var : string) (ls : 'a list) : (t * 'a) list =

@@ -15,6 +15,10 @@ let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relatio
   | Context.Eq (l, r) -> Eq (n <$ l, n <$ r)
 
 let of_context_relation (rel : Context.relation) : t =
+  let _ = print_endline ("\nTESTING CONVERSION") in
+  let _ = print_endline (Context.relation_to_string rel) in
+  let v = vars rel in
+  let _ = CCList.iter (fun x -> print_endline ("\t" ^ (Name.to_string x))) v in
   let f = fun n -> relation_of_context_relation n rel in Conjunction (CCList.map f (vars rel))
 
 let is_unsat : t -> bool = function

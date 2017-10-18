@@ -5,10 +5,10 @@ type 'a t =
 
 (* the only destructor we might want outside of pattern matching *)
 let hd : 'a t -> 'a = function
-  | Empty -> failwith "can't take hd of empty stack"
+  | Empty -> failwith "can't take hd of empty Rlist"
   | Cons (s, _) -> s
 
-(* combining stacks in the obvious way *)
+(* combining Rlists in the obvious way *)
 let rec concat (l : 'a t) (r : 'a t) : 'a t = match r with
   | Empty -> l
   | Cons (s, ss) -> Cons (s, concat l ss)

@@ -9,7 +9,7 @@ type t = {
 let to_proposal : t -> Proposal.t = fun p -> {
     Proposal.solution = Fterm.Prim (p.name, p.source);
     Proposal.dtype = p.dtype;
-    Proposal.wildcards = Stack.Empty;
+    Proposal.wildcards = Rlist.Empty;
     Proposal.context = Context.Empty;
     Proposal.variables = [];
   }

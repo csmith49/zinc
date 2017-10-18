@@ -34,12 +34,12 @@ let rec variable_proposals (sp : t) : Proposal.t list =
     Proposal.variables = [];
     Proposal.solution = Fterm.Free n;
     Proposal.dtype = dt;
-    Proposal.wildcards = Stack.Empty;
+    Proposal.wildcards = Rlist.Empty;
     Proposal.context = Context.concrete_of_var n dt;
   } in CCList.map f (variables sp)
 and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
   | (_, prefix, _) ->
-    let bindings = Stack.to_list prefix in
+    let bindings = Rlist.to_list prefix in
     let f = fun b -> match b with
       | Fterm.Prefix.BAbs (n, dt) -> Some (n, dt)
       | _ -> None
@@ -50,7 +50,7 @@ let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
   | Dtype.Func (Dtype.Modal (s, dom), codom) ->
     let w = sp.root <+ "w" in
     let context = Context.Symbolic (sp.root <+ "c") in
-    let wild_bindings = Stack.Cons (Fterm.Prefix.BWild (w, context, codom), Stack.Empty) in
+    let wild_bindings = Rlist.Cons (Fterm.Prefix.BWild (w, context, codom), Rlist.Empty) in
     Some {
       Proposal.variables = [];
       Proposal.solution = Fterm.Abs (dom, Fterm.Sc (Fterm.Free w));
@@ -68,6 +68,7 @@ let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
   let phi, sub = Inference.subtype_unify sp.root p.Proposal.variables sp.goal p.Proposal.dtype in
   if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
   let context_obligations = Constraint.of_context_relation (Context.Eq (p.Proposal.context, sp.context)) in
+  let _ = print_endline (Constraint.to_string context_obligations) in
   Some {
     Node.root = sp.root;
     Node.obligation = phi & context_obligations;
@@ -94,7 +95,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.variables = [];
         Proposal.solution = Fterm.App (f, Fterm.Free w);
         Proposal.dtype = codom;
-        Proposal.wildcards = Stack.Cons (binding, prop.Proposal.wildcards);
+        Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
         Proposal.context = Context.Plus (prop.Proposal.context, Context.Times (s, c));
       } in specialize (root <+ "step") p
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->

@@ -105,3 +105,9 @@ let rec to_string : t -> string = function
     let c' = to_string c in
     s' ^ " * " ^ c'
   | Empty -> "∅"
+
+let relation_to_string : relation -> string = function
+| Eq (l, r) ->
+  let l' = to_string l in
+  let r' = to_string r in
+  l' ^ " = " ^ r'
