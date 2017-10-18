@@ -46,7 +46,10 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = print_endline ("Checking: " ^ (Fterm.to_string tm)) in
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
-      if (Benchmark.verify tm bm.Benchmark.io_examples) then raise (SynthSuccess tm) else ()
+      let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
+      let _ = print_endline ("\tObligation: " ^ (Constraint.to_string node.Node.obligation)) in
+      (* let meets_sens_constraint = Solver.check node.Node.obligation in *)
+      if (meets_examples) then raise (SynthSuccess tm) else ()
     (* if not, and there's a wild binder, find all expansions *)
     else
       let subproblem = Subproblem.of_node (Name.of_string "w") node in

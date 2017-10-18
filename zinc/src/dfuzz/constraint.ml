@@ -21,6 +21,21 @@ let is_unsat : t -> bool = function
   | Unsat -> true
   | _ -> false
 
+let rec to_string : t -> string = function
+  | Unsat -> "UNSAT"
+  | Conjunction [] -> "T"
+  | Conjunction (r :: []) -> relation_to_string r
+  | Conjunction (r :: rs) -> (relation_to_string r) ^ " & " ^ (to_string (Conjunction rs))
+and relation_to_string : relation -> string = function
+  | LEq (l, r) -> 
+    let l' = Sensitivity.to_string l in
+    let r' = Sensitivity.to_string r in
+      l' ^ " <= " ^ r'
+  | Eq (l, r) ->
+    let l' = Sensitivity.to_string l in
+    let r' = Sensitivity.to_string r in
+      l' ^ " = " ^ r'
+
 (* alternative construction syntax *)
 module Alt = struct
   let top : t =  Conjunction []

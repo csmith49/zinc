@@ -70,3 +70,5 @@ module Check = struct
     | Z3.Solver.SATISFIABLE -> true
     | _ -> false
 end
+
+let check : Constraint.t -> bool = fun c -> Check.is_sat (expr_of_constraint c)
