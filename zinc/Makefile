@@ -8,7 +8,7 @@ zinc: $(shell find src -type f) $(shell find builtins -type f)
 	$(ocb) zinc.native
 	mv zinc.native zinc
 
-byte: $(shell find src -type f) $(shell find builtins -type f)
+byte: $(shell find src -type f) $(shell find builtins -type f) clean
 	$(ocb) zinc.byte
 	mv zinc.byte zinc
 
