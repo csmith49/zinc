@@ -41,7 +41,7 @@ and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
   | (_, prefix, _) ->
     let bindings = Rlist.to_list prefix in
     let f = fun b -> match b with
-      | Fterm.Prefix.BAbs (n, dt) -> Some (n, dt)
+      | Fterm.Prefix.BAbs (tag, dt) -> Some (tag, dt)
       | _ -> None
     in CCList.filter_map f bindings
 
@@ -49,14 +49,15 @@ and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
 let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
   | Dtype.Func (Dtype.Modal (s, dom), codom) ->
     let w = sp.root <+ "w" in
+    let tag = sp.root <+ "x" in
     let context = Context.Symbolic (sp.root <+ "c") in
     let wild_bindings = Rlist.Cons (Fterm.Prefix.BWild (w, context, codom), Rlist.Empty) in
     Some {
       Proposal.variables = [];
-      Proposal.solution = Fterm.Abs (dom, Fterm.Sc (Fterm.Free w));
+      Proposal.solution = Fterm.Abs (tag, dom, Fterm.Sc (Fterm.Free w));
       Proposal.dtype = sp.goal;
       Proposal.wildcards = wild_bindings;
-      Proposal.context = Context.Times (s, context);
+      Proposal.context = Context.Plus (context, Context.Concrete (tag, Context.EModal.S (s, Context.EModal.Concrete dom)));
     }
   | _ -> None
 
@@ -86,6 +87,7 @@ open Name.Alt
 let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
   let recurse = match prop.Proposal.dtype with
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
+      let root = root <+ "step_abs" in
       let c = Context.Symbolic (root <+ "c") in
       let w = root <+ "wild" in
       let binding = Fterm.Prefix.BWild (w, c, dom) in
@@ -97,8 +99,9 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.dtype = codom;
         Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
         Proposal.context = Context.Plus (prop.Proposal.context, Context.Times (s, c));
-      } in specialize (root <+ "step") p
+      } in specialize root p
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
+      let root = root <+ "step_tyabs" in
       let a = root <+ "type" in
       let f = prop.Proposal.solution in
       let p = {
@@ -107,8 +110,9 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.dtype = Dtype.instantiate (Dtype.Free a) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = prop.Proposal.context;
-      } in specialize (root <+ "step") p
+      } in specialize root p
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KSens ->
+      let root = root <+ "step_sensabs" in
       let s = root <+ "sens" in
       let f = prop.Proposal.solution in
       let p = {
@@ -117,6 +121,6 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.dtype = Dtype.instantiate_sens (Sensitivity.Free s) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = prop.Proposal.context;
-      } in specialize (root <+ "step") p
+      } in specialize root p
     | _ -> []
   in prop :: recurse

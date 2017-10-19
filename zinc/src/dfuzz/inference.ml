@@ -70,7 +70,7 @@ module Sub = struct
     | _ -> false
   (* fterm application *)
   let rec apply_fterm (sub : t) (tm : Fterm.t) : Fterm.t = match tm with
-    | Fterm.Abs (dt, body) -> Fterm.Abs (apply sub dt, apply_sc sub body)
+    | Fterm.Abs (tag, dt, body) -> Fterm.Abs (tag, apply sub dt, apply_sc sub body)
     | Fterm.App (l, r) -> Fterm.App (apply_fterm sub l, apply_fterm sub r)
     | Fterm.TyAbs body -> Fterm.TyAbs (apply_sc sub body)
     | Fterm.TyApp (f, arg) -> Fterm.TyApp (apply_fterm sub f, apply sub arg)

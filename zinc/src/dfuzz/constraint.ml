@@ -22,6 +22,7 @@ let is_unsat : t -> bool = function
 let rec to_string : t -> string = function
   | Unsat -> "⊥"
   | Top -> "⊤"
+  | Conjunction (r, Top) -> Relation.to_string r
   | Conjunction (r, rs) -> (Relation.to_string r) ^ " ∧ " ^ (to_string rs)
 
 (* alternative construction syntax *)

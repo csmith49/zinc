@@ -56,7 +56,7 @@ let synthesize (bm : Benchmark.t) : unit =
     else
       let subproblem = Subproblem.of_node (Name.of_string "w") node in
       let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem)) in
-      let root = Name.of_string "specialize" in
+      let root = Rlist.Cons (Name.Id ("specialize", 0), subproblem.Subproblem.root) in
       (* PRINTING *)
       let f = fun p -> Subproblem.specialize root p in
       let solutions = CCList.flat_map f proposals in

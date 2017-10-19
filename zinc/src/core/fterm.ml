@@ -2,7 +2,7 @@
 type t =
   | Free of Name.t
   | Bound of int
-  | Abs of Dtype.t * scope
+  | Abs of Name.t * Dtype.t * scope
   | App of t * t
   (* type level things *)
   | TyAbs of scope
@@ -29,8 +29,8 @@ and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
   | SensApp (f, arg) ->
     SensApp (abstract' n db f, Sensitivity.abstract' n db arg)
   (* the passing over a scope constructor recursion *)
-  | Abs (dom, Sc tm') ->
-    Abs (Dtype.abstract' n db dom, Sc (abstract' n (db + 1) tm'))
+  | Abs (n', dom, Sc tm') ->
+    Abs (n', Dtype.abstract' n db dom, Sc (abstract' n (db + 1) tm'))
   | TyAbs (Sc tm') -> TyAbs (Sc (abstract' n (db + 1) tm'))
   | SensAbs (Sc tm') -> SensAbs (Sc (abstract' n (db + 1) tm'))
   | Wild (context, dom, Sc tm') ->
@@ -52,7 +52,7 @@ and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
   | TyApp (f, arg) -> TyApp (instantiate' img db f, arg)
   | SensApp (f, arg) -> SensApp (instantiate' img db f, arg)
   (* passing over scope constructors *)
-  | Abs (dom, Sc tm') -> Abs (dom, Sc (instantiate' img (db + 1) tm'))
+  | Abs (n',dom, Sc tm') -> Abs (n', dom, Sc (instantiate' img (db + 1) tm'))
   | TyAbs (Sc tm') -> TyAbs (Sc (instantiate' img (db + 1) tm'))
   | SensAbs (Sc tm') -> SensAbs (Sc (instantiate' img (db + 1) tm'))
   | Wild (context, dom, Sc tm') ->
@@ -64,8 +64,8 @@ let rec instantiate_dtype (img : Dtype.t) (s : scope) : t = match s with
   | Sc tm' -> instantiate_dtype' img 0 tm'
 and instantiate_dtype' (img : Dtype.t) (db : int) (tm : t) : t = match tm with
   (* note when we break into the Dtype.instantiate' we _don't_ increment db *)
-  | Abs (dom, Sc tm') ->
-    Abs (Dtype.instantiate' img db dom, Sc (instantiate_dtype' img (db + 1) tm'))
+  | Abs (n', dom, Sc tm') ->
+    Abs (n', Dtype.instantiate' img db dom, Sc (instantiate_dtype' img (db + 1) tm'))
   | App (f, arg) ->
     App (instantiate_dtype' img db f, instantiate_dtype' img db arg)
   | TyAbs (Sc tm') ->
@@ -88,8 +88,8 @@ let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
   | Sc tm' -> instantiate_sens' img 0 tm'
 and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm with
   (* note when we break into the Sensitivity.instantiate' we _don't_ increment db *)
-  | Abs (dom, Sc tm') ->
-    Abs (Dtype.instantiate_sens' img db dom, Sc (instantiate_sens' img (db + 1) tm'))
+  | Abs (n', dom, Sc tm') ->
+    Abs (n', Dtype.instantiate_sens' img db dom, Sc (instantiate_sens' img (db + 1) tm'))
   | App (f, arg) ->
     App (instantiate_sens' img db f, instantiate_sens' img db arg)
   | TyAbs (Sc tm') ->
@@ -116,7 +116,7 @@ let rec eval (tm : t) : Value.t = match tm with
       | Value.F f' -> f' (eval arg)
       | _ -> failwith "can't apply a non-abstraction value"
     end
-  | Abs (_, body) ->
+  | Abs (_, _, body) ->
     let f = fun v -> eval (instantiate (Const v) body) in Value.F f
   | Const v -> v
   | Prim (_, f) -> f
@@ -141,14 +141,14 @@ module Prefix = struct
   (* I love me some alternative syntax *)
   module Alt = struct
     let (@>) (b : binding) (tm : fterm) : fterm = match b with
-      | BAbs (n, dom) -> Abs (dom, abstract n tm)
+      | BAbs (tag, dom) -> Abs (tag, dom, abstract tag tm)
       | BTyAbs n -> TyAbs (abstract n tm)
       | BSensAbs n -> SensAbs (abstract n tm)
       | BWild (n, context, dom) ->
         Wild (context, dom, abstract n tm)
     let (<@) (n : Name.t) (tm : fterm) : (binding * fterm) option =
       match tm with
-      | Abs (dom, body) -> Some (BAbs (n, dom), instantiate (Free n) body)
+      | Abs (tag, dom, body) -> Some (BAbs (tag, dom), instantiate (Free tag) body)
       | TyAbs body -> Some (BTyAbs n, instantiate_dtype (Dtype.Free n) body)
       | SensAbs body -> Some (BSensAbs n, instantiate_sens (Sensitivity.Free n) body)
       | Wild (context, dom, body) -> Some (BWild (n, context, dom), instantiate (Free n) body)
@@ -226,7 +226,7 @@ end
 
 (* we need to be able to determine sizes for heuristic purposes *)
 let rec size : t -> int = function
-  | Abs (_, Sc body) -> 1 + (size body)
+  | Abs (_, _, Sc body) -> 1 + (size body)
   | App (l, r) -> 1 + (size l) + (size r)
   | TyAbs (Sc body) -> 1 + (size body)
   | TyApp (f, _) -> 1 + (size f)
@@ -237,7 +237,7 @@ let rec size : t -> int = function
 
 (* utility for checking if there are any wild binders floating around the term *)
 let rec wild_closed : t -> bool = function
-  | Abs (_, Sc body) -> wild_closed body
+  | Abs (_, _, Sc body) -> wild_closed body
   | App (l, r) -> (wild_closed l) && (wild_closed r)
   | TyAbs (Sc body) -> wild_closed body
   | TyApp (f, _) -> wild_closed f
@@ -254,7 +254,7 @@ let rec to_string : t -> string =
 and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm with
   | Free n -> (Name.to_string n, s)
   | Bound i -> (string_of_int i, s)
-  | Abs (dt, body) ->
+  | Abs (_, dt, body) ->
     let x, s' = Name.Stream.draw_abs s in
     let dt', s'' = Dtype.to_string' dt s' in
     let body', s''' = to_string' (instantiate (Free x) body) s'' in
