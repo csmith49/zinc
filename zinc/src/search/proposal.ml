@@ -4,6 +4,7 @@ type t = {
   wildcards : Fterm.Prefix.t;
   context : Context.t;
   variables : Name.t list;
+  obligation : Constraint.t;
 }
 
 let to_string (p : t) : string =

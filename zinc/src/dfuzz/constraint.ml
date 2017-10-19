@@ -40,4 +40,7 @@ module Alt = struct
     | _ -> Unsat
   let unsat : t = Unsat
   let num : int -> Sensitivity.t = fun n -> Sensitivity.Const (Rational.of_int n)
+
+  let c_rel : Context.Relation.t -> t = fun cr -> Conjunction (Relation.C cr, Top)
+  let s_rel : Sensitivity.Relation.t -> t = fun sr -> Conjunction (Relation.S sr, Top)
 end

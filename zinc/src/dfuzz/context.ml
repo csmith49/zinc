@@ -113,4 +113,10 @@ module Alt = struct
   let (<$) (n : Name.t) (c : t) : Sensitivity.t = extract_sensitivity n c
   let vars : Relation.t -> Name.t list = Relation.support
   let (=$) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
+
+  (* construction *)
+  let ( =. ) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
+  let ( *. ) (l : Sensitivity.t) (r : t) : t = Times (l, r)
+  let ( +. ) (l : t) (r : t) : t = Plus (l, r)
+  let concrete (n : Name.t) (s : Sensitivity.t) (dt : Dtype.t) = Concrete (n, EModal.S (s, EModal.Concrete dt))
 end
