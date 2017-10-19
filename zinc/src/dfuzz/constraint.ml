@@ -35,8 +35,7 @@ module Alt = struct
   let rec (&) (l : t) (r : t) : t = match l, r with
     | Top, (_ as r) -> r
     | (_ as r), Top -> r
-    | Conjunction (l, ls), (Conjunction _ as right) ->
-      ls & Conjunction (l, right)
+    | Conjunction (l, ls), (Conjunction _ as right) -> Conjunction (l, ls & right)
     | _ -> Unsat
   let unsat : t = Unsat
   let num : int -> Sensitivity.t = fun n -> Sensitivity.Const (Rational.of_int n)

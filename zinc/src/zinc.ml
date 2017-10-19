@@ -66,16 +66,17 @@ let synthesize (bm : Benchmark.t) : unit =
     else
       let root = node.Node.root <+ ("spec_" ^ (string_of_int !counter)) in
       let subproblem = Subproblem.of_node (root <+ "w") node in
-      let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem)) in
+      let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) in
      
-      let f = fun p -> Subproblem.specialize root p in
+      let f = fun p -> Subproblem.specialize root p subproblem.Subproblem.context in
       let solutions = CCList.flat_map f proposals in
       let steps = CCList.filter_map (fun p -> 
         let _ = print_string ("\tEx: " ^ (Proposal.to_string p) ^ "...") in
+        let _ = print_string ((Constraint.to_string p.Proposal.obligation) ^ "...") in
         let ans = Subproblem.insert_proposal p subproblem in
         let _ = print_endline (if CCOpt.is_some ans then "ok" else "no")
         in ans) 
-        solutions in
+        (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
       
       CCList.iter (fun n -> 
         frontier := Frontier.push (Node.to_priority n) n !frontier) steps

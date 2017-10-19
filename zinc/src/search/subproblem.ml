@@ -33,14 +33,15 @@ let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
 
 (* depending on the variables in scope, we have a list of proposals *)
 let rec variable_proposals (sp : t) : Proposal.t list =
-  let f = fun (n, dt) -> {
-    Proposal.variables = [];
-    Proposal.solution = Fterm.Free n;
-    Proposal.dtype = dt;
-    Proposal.wildcards = Rlist.Empty;
-    Proposal.context = Context.concrete_of_var n dt;
-    Proposal.obligation = c_rel (sp.context =. (Context.concrete_of_var n dt));
-  } in CCList.map f (variables sp)
+  let f = fun (n, dt) -> 
+    {
+      Proposal.variables = []; 
+      Proposal.solution = Fterm.Free n;
+      Proposal.dtype = dt;
+      Proposal.wildcards = Rlist.Empty;
+      Proposal.context = Context.concrete_of_var n dt;
+      Proposal.obligation = Constraint.Top;
+    } in CCList.map f (variables sp)
 and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
   | (_, prefix, _) ->
     let bindings = Rlist.to_list prefix in
@@ -75,6 +76,7 @@ let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
   if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
   Some {
     Node.root = sp.root;
+    (* Node.obligation = (c_rel (p.Proposal.context =. sp.context)) & phi & p.Proposal.obligation & sp.obligation; *)
     Node.obligation = phi & p.Proposal.obligation & sp.obligation;
     Node.solution =
       let tm = Inference.Sub.apply_fterm sub p.Proposal.solution in
@@ -83,7 +85,7 @@ let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
   }
   else None
 
-let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
+let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : Proposal.t list =
   let recurse = match prop.Proposal.dtype with
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
       let root = root <+ "step_abs" in
@@ -100,7 +102,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
         Proposal.context = c;
         Proposal.obligation = c_rel (c =. (prop.Proposal.context +. (s *. c_wild)));
-      } in specialize root p
+      } in specialize root p context
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
       let root = root <+ "step_tyabs" in
       let c = Context.Symbolic (root <+ "c") in
@@ -113,7 +115,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;
         Proposal.obligation = c_rel (c =. prop.Proposal.context);
-      } in specialize root p
+      } in specialize root p context
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KSens ->
       let root = root <+ "step_sensabs" in
       let c = Context.Symbolic (root <+ "c") in
@@ -126,6 +128,6 @@ let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;
         Proposal.obligation = c_rel (c =. prop.Proposal.context);
-      } in specialize root p
+      } in specialize root p context
     | _ -> []
-  in prop :: recurse
+  in {prop with Proposal.obligation = prop.Proposal.obligation & (c_rel (context =. prop.Proposal.context));} :: recurse
