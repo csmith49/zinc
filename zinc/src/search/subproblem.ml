@@ -69,10 +69,9 @@ let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
   if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
   let context_obligations = 
     Constraint.Conjunction (Constraint.Relation.C (Context.Relation.Eq (p.Proposal.context, sp.context)), Constraint.Top) in
-  let _ = print_endline (Constraint.to_string context_obligations) in
   Some {
     Node.root = sp.root;
-    Node.obligation = phi & context_obligations;
+    Node.obligation = phi & context_obligations & sp.obligation;
     Node.solution =
       let tm = Inference.Sub.apply_fterm sub p.Proposal.solution in
       let z = Fterm.Zipper.set tm sp.hole in
@@ -87,7 +86,7 @@ open Name.Alt
 let rec specialize (root : Name.t) (prop : Proposal.t) : Proposal.t list =
   let recurse = match prop.Proposal.dtype with
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
-      let c = Context.Symbolic (root <+ "context") in
+      let c = Context.Symbolic (root <+ "c") in
       let w = root <+ "wild" in
       let binding = Fterm.Prefix.BWild (w, c, dom) in
       let f = prop.Proposal.solution in
