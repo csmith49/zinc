@@ -67,7 +67,8 @@ open Constraint.Alt
 let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
   let phi, sub = Inference.subtype_unify sp.root p.Proposal.variables sp.goal p.Proposal.dtype in
   if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
-  let context_obligations = Constraint.of_context_relation (Context.Eq (p.Proposal.context, sp.context)) in
+  let context_obligations = 
+    Constraint.Conjunction (Constraint.Relation.C (Context.Relation.Eq (p.Proposal.context, sp.context)), Constraint.Top) in
   let _ = print_endline (Constraint.to_string context_obligations) in
   Some {
     Node.root = sp.root;

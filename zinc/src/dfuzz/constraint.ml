@@ -1,52 +1,41 @@
 open Context.Alt
 
-(* constraints have two forms - equality, and inequality *)
-type relation =
-  | Eq of Sensitivity.t * Sensitivity.t
-  | LEq of Sensitivity.t * Sensitivity.t
+module Relation = struct
+  type t = 
+    | S of Sensitivity.Relation.t
+    | C of Context.Relation.t
+  
+  let to_string : t -> string = function
+    | S sr -> Sensitivity.Relation.to_string sr
+    | C cr -> Context.Relation.to_string cr
+end
 
-(* but we maintain a list of these relations as we abduce *)
 type t =
-  | Conjunction of relation list
   | Unsat
-
-(* an important conversion is context relations to constraints *)
-let relation_of_context_relation (n : Name.t) (rel : Context.relation) : relation = match rel with
-  | Context.Eq (l, r) -> Eq (n <$ l, n <$ r)
-
-let of_context_relation (rel : Context.relation) : t =
-  let _ = print_endline ("\nTESTING CONVERSION") in
-  let _ = print_endline (Context.relation_to_string rel) in
-  let v = vars rel in
-  let _ = CCList.iter (fun x -> print_endline ("\t" ^ (Name.to_string x))) v in
-  let f = fun n -> relation_of_context_relation n rel in Conjunction (CCList.map f (vars rel))
+  | Top
+  | Conjunction of Relation.t * t
 
 let is_unsat : t -> bool = function
   | Unsat -> true
   | _ -> false
 
 let rec to_string : t -> string = function
-  | Unsat -> "UNSAT"
-  | Conjunction [] -> "T"
-  | Conjunction (r :: []) -> relation_to_string r
-  | Conjunction (r :: rs) -> (relation_to_string r) ^ " & " ^ (to_string (Conjunction rs))
-and relation_to_string : relation -> string = function
-  | LEq (l, r) -> 
-    let l' = Sensitivity.to_string l in
-    let r' = Sensitivity.to_string r in
-      l' ^ " <= " ^ r'
-  | Eq (l, r) ->
-    let l' = Sensitivity.to_string l in
-    let r' = Sensitivity.to_string r in
-      l' ^ " = " ^ r'
+  | Unsat -> "⊥"
+  | Top -> "⊤"
+  | Conjunction (r, rs) -> (Relation.to_string r) ^ " ∧ " ^ (to_string rs)
 
 (* alternative construction syntax *)
 module Alt = struct
-  let top : t =  Conjunction []
-  let (==) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Conjunction [Eq (s, s')]
-  let (<=) (s : Sensitivity.t) (s' : Sensitivity.t) : t = Conjunction [LEq (s, s')]
-  let (&) (l : t) (r : t) : t = match l, r with
-    | Conjunction ls, Conjunction rs -> Conjunction (ls @ rs)
+  let top : t =  Top
+  let (==) (s : Sensitivity.t) (s' : Sensitivity.t) : t = 
+    Conjunction (Relation.S (Sensitivity.Relation.Eq (s, s')), top)
+  let (<=) (s : Sensitivity.t) (s' : Sensitivity.t) : t =
+    Conjunction (Relation.S (Sensitivity.Relation.LEq (s, s')), top)
+  let rec (&) (l : t) (r : t) : t = match l, r with
+    | Top, (_ as r) -> r
+    | (_ as r), Top -> r
+    | Conjunction (l, ls), (Conjunction _ as right) ->
+      ls & Conjunction (l, right)
     | _ -> Unsat
   let unsat : t = Unsat
   let num : int -> Sensitivity.t = fun n -> Sensitivity.Const (Rational.of_int n)

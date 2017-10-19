@@ -58,3 +58,22 @@ let rec to_string : t -> string = function
     l' ^ " * " ^ r'
   | Zero -> "0"
   | Succ s -> (to_string s) ^ " + 1"
+
+(* we need to reference it later *)
+type sens = t
+
+module Relation = struct
+  type t =
+    | Eq of sens * sens
+    | LEq of sens * sens
+  
+  let to_string : t -> string = function
+    | Eq (l, r) ->
+      let l' = to_string l in
+      let r' = to_string r in
+        l' ^ " = " ^ r'
+    | LEq (l, r) ->
+      let l' = to_string l in
+      let r' = to_string r in
+        l' ^ " = " ^ r'
+end

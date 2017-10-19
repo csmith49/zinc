@@ -75,39 +75,42 @@ let rec extract_type (n : Name.t) (c : t) : EModal.t = match c with
 (* sure, this is just a simple composition, but still *)
 let extract_sensitivity (n : Name.t) (c : t) : Sensitivity.t = EModal.to_sensitivity (extract_type n c)
 
-(* so that we can keep things straight *)
-type relation = Eq of t * t
+(* printing *)
+let rec to_string : t -> string = function
+| Concrete (n, em) ->
+  let n' = Name.to_string n in
+  let em' = EModal.to_string em in
+  "{" ^ n' ^ " : " ^ em' ^ "}"
+| Symbolic n -> Name.to_string n
+| Plus (l, r) ->
+  let l' = to_string l in
+  let r' = to_string r in
+  l' ^ " + " ^ r'
+| Times (s, c) ->
+  let s' = Sensitivity.to_string s in
+  let c' = to_string c in
+  s' ^ " * " ^ c'
+| Empty -> "∅"
 
-(* we care about the concrete support of a relation *)
-let relation_support : relation -> Name.t list = function
-  | Eq (l, r) -> (support l) @ (support r)
+(* so that we can keep things straight *)
+type context = t
+
+module Relation = struct
+  type t = Eq of context * context
+
+  let to_string : t -> string = function
+    | Eq (l, r) ->
+      let l' = to_string l in
+      let r' = to_string r in
+        l' ^ " = " ^ r'
+  
+  let support : t -> Name.t list = function
+    | Eq (l, r) -> (support l) @ (support r)
+end
 
 (* because we love that alternative syntax *)
 module Alt = struct
   let (<$) (n : Name.t) (c : t) : Sensitivity.t = extract_sensitivity n c
-  let vars : relation -> Name.t list = relation_support
-  let (=$) (l : t) (r : t) : relation = Eq (l, r)
+  let vars : Relation.t -> Name.t list = Relation.support
+  let (=$) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
 end
-
-(* printing *)
-let rec to_string : t -> string = function
-  | Concrete (n, em) ->
-    let n' = Name.to_string n in
-    let em' = EModal.to_string em in
-    "{" ^ n' ^ " : " ^ em' ^ "}"
-  | Symbolic n -> Name.to_string n
-  | Plus (l, r) ->
-    let l' = to_string l in
-    let r' = to_string r in
-    l' ^ " + " ^ r'
-  | Times (s, c) ->
-    let s' = Sensitivity.to_string s in
-    let c' = to_string c in
-    s' ^ " * " ^ c'
-  | Empty -> "∅"
-
-let relation_to_string : relation -> string = function
-| Eq (l, r) ->
-  let l' = to_string l in
-  let r' = to_string r in
-  l' ^ " = " ^ r'

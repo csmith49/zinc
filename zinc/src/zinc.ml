@@ -1,6 +1,6 @@
 open Signature
 open Inference
-open Solver
+(* open Solver *)
 
 (* references for command line arguments *)
 let benchmark_name = ref ""
