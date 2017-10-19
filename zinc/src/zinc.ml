@@ -32,32 +32,42 @@ let frontier = ref Frontier.empty
 (* an exception we throw to exit the loop *)
 exception SynthSuccess of Fterm.t
 
+(* we use a counter for stat-keeping purposes, and for making sure node roots are unique *)
+let counter = ref 0
+
+open Name.Alt
+
 (* the infinite loop, in a function we can back out of *)
 let synthesize (bm : Benchmark.t) : unit =
   (* generate start node and initialize frontier *)
   let start_node = Benchmark.to_node bm in
   let _ = frontier := Frontier.push (Node.to_priority start_node) start_node !frontier in
   let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.search_grammar in
+  
   (* repeatedly pull nodes and check for satisfiability *)
   while true do
     (* pull from frontier *)
     let node, p, frontier' = Frontier.pop !frontier in
     let _ = frontier := frontier' in
     let tm = node.Node.solution in
+    let _ = counter := !counter + 1 in
+
     (* PRINTING *)
     let _ = print_endline ("Checking: " ^ (Fterm.to_string tm)) in
     let _ = print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) in
+    
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
       let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
       (* let meets_sens_constraint = Solver.check node.Node.obligation in *)
       if (meets_examples) then raise (SynthSuccess tm) else ()
+    
     (* if not, and there's a wild binder, find all expansions *)
     else
-      let subproblem = Subproblem.of_node (Name.of_string "w") node in
+      let root = node.Node.root <+ ("spec_" ^ (string_of_int !counter)) in
+      let subproblem = Subproblem.of_node (root <+ "w") node in
       let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem)) in
-      let root = Rlist.Cons (Name.Id ("specialize", 0), subproblem.Subproblem.root) in
-      (* PRINTING *)
+     
       let f = fun p -> Subproblem.specialize root p in
       let solutions = CCList.flat_map f proposals in
       let steps = CCList.filter_map (fun p -> 
@@ -67,8 +77,8 @@ let synthesize (bm : Benchmark.t) : unit =
         in ans) 
         solutions in
       
-      CCList.iteri (fun i -> fun n -> 
-        frontier := Frontier.push (Node.to_priority n) {n with Node.root = Rlist.Cons (Name.Id ("n", i), n.Node.root);} !frontier) steps
+      CCList.iter (fun n -> 
+        frontier := Frontier.push (Node.to_priority n) n !frontier) steps
   done;;
 
 (* run the experiment, and catch the output *)
