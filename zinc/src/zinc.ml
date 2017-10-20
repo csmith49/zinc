@@ -1,6 +1,5 @@
 open Signature
 open Inference
-(* open Solver *)
 
 (* references for command line arguments *)
 let benchmark_name = ref ""
@@ -24,6 +23,9 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
 
 (* pull the benchmark from the arguments *)
 let benchmark = extract_benchmark !benchmark_name Benchmark.basic
+
+(* construct the strategy *)
+module Strategy = Solver.Strategy(Solver.Basic)
 
 (* consruct the frontier from the benchmarks start position *)
 module Frontier = Pqueue.Make(Node.Priority)
@@ -60,8 +62,8 @@ let synthesize (bm : Benchmark.t) : unit =
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
       let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
-      (* let meets_sens_constraint = Solver.check node.Node.obligation in *)
-      if (meets_examples) then raise (SynthSuccess tm) else ()
+      let meets_sens_constraint = Strategy.check node.Node.obligation in
+      if (meets_examples && meets_sens_constraint) then raise (SynthSuccess tm) else ()
     
     (* if not, and there's a wild binder, find all expansions *)
     else

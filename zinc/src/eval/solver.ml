@@ -43,32 +43,75 @@ module Make = struct
   let failure : expr = Boolean.mk_false context
 end
 
-(* conversion between our different data types *)
-let rec expr_of_sensitivity : Sensitivity.t -> expr = function
-  | Sensitivity.Free n -> Make.variable n
-  | Sensitivity.Const c -> Make.rational c
-  | Sensitivity.Plus (l, r) -> Make.plus (expr_of_sensitivity l) (expr_of_sensitivity r)
-  | Sensitivity.Mult (l, r) -> Make.mult (expr_of_sensitivity l) (expr_of_sensitivity r)
-  | Sensitivity.Zero -> Make.rational RationalConstants.zero
-  | Sensitivity.Succ s -> Make.plus (expr_of_sensitivity s) (Make.rational RationalConstants.one)
-  | _ -> failwith "can't convert to a z3 formula"
-
-let expr_of_relation : Constraint.relation -> expr = function
-  | Constraint.LEq (l, r) -> Make.leq (expr_of_sensitivity l) (expr_of_sensitivity r)
-  | Constraint.Eq (l, r) -> Make.eq (expr_of_sensitivity l) (expr_of_sensitivity r)
-
-let expr_of_constraint : Constraint.t -> expr = function
-  | Constraint.Conjunction cs -> Make.conjoin_list ( Make.empty :: (CCList.map expr_of_relation cs))
-  | Constraint.Unsat -> Make.failure
-
-(* TODO : make sure that all rational variables are bounded by the constants of infinity and zero *)
-
-(* holds solver construction and whatnot *)
-module Check = struct
-  let solver = Z3.Solver.mk_solver context None
-  let is_sat : expr -> bool = fun c -> match Z3.Solver.check solver [c] with
-    | Z3.Solver.SATISFIABLE -> true
-    | _ -> false
+(* signature parameterizing a strategy for converting relations to z3 expressions *)
+module type STRATEGY = sig
+  type t
+  val of_constraint : Constraint.t -> t
+  val to_expr_list : t -> expr list
 end
 
-let check : Constraint.t -> bool = fun c -> Check.is_sat (expr_of_constraint c)
+(* converts an instance of STRATEGY to a module for checking wrt z3 *)
+module Strategy = functor (S : STRATEGY) -> struct
+  let solver = Z3.Solver.mk_solver context None
+
+  let propositional_representation : expr list -> expr * expr = fun exprs ->
+    let p = Boolean.mk_const_s context "p" in
+    let propositional = Boolean.mk_eq context p (Make.conjoin_list exprs) in
+      (p, propositional)
+
+  (* the reason we want this - given a strat, wrap it in a call to z3 *)
+  let check : Constraint.t -> bool = fun c ->
+    let exprs = S.to_expr_list (S.of_constraint c) in
+    let (p, propositional) = propositional_representation exprs in
+    let _ = Z3.Solver.reset solver in
+    let _ = Z3.Solver.add solver [propositional] in
+    match Z3.Solver.check solver [p] with
+      | Z3.Solver.SATISFIABLE -> true
+      | _ -> false
+end
+
+(* here we describe strategies *)
+module Basic = struct
+  type t = Sensitivity.Relation.t list
+
+  (* conversion from constraints *)
+  let of_constraint : Constraint.t -> t = Constraint.flatten
+
+  (* we convert each expression independently *)
+  let rec expr_of_sens : Sensitivity.t -> expr = function
+    | Sensitivity.Free n -> Make.variable n
+    | Sensitivity.Const c -> Make.rational c
+    | Sensitivity.Plus (l, r) -> Make.plus (expr_of_sens l) (expr_of_sens r)
+    | Sensitivity.Mult (l, r) -> Make.mult (expr_of_sens l) (expr_of_sens r)
+    | Sensitivity.Zero -> Make.rational RationalConstants.zero
+    | Sensitivity.Succ s -> Make.plus (expr_of_sens s) (Make.rational RationalConstants.one)
+    | _ -> failwith "can't convert to a z3 formula"
+
+  (* lift to constraining relations *)
+  let expr_of_sens_rel : Sensitivity.Relation.t -> expr = function
+    | Sensitivity.Relation.Eq (l, r) -> Make.eq (expr_of_sens l) (expr_of_sens r)
+    | Sensitivity.Relation.LEq (l, r) -> Make.leq (expr_of_sens l) (expr_of_sens r)
+
+  (* but we also constrain any variables that we have *)
+  let constrain_variable : Name.t -> expr = fun n ->
+    let x = Make.variable n in
+    let zero = Make.rational RationalConstants.zero in
+    let infinity = Make.rational RationalConstants.infinity in
+      Make.conjoin (Make.leq x infinity) (Make.leq zero x)
+
+  (* lift free var computation to relations *)
+  let variables : Sensitivity.Relation.t -> Name.t list = function
+    | Sensitivity.Relation.Eq (l, r) -> (Sensitivity.free_vars l) @ (Sensitivity.free_vars r)
+    | Sensitivity.Relation.LEq (l, r) -> (Sensitivity.free_vars l) @ (Sensitivity.free_vars r)
+
+  (* we find all variables so we can constrain appropriately *)
+  let variables : t -> Name.t list = CCList.flat_map variables
+
+  (* the final conversion *)
+  let to_expr_list : t -> expr list = function
+    | [] -> [Make.failure]
+    | (_ as srs) ->
+      let var_constraints = CCList.map constrain_variable (variables srs) in
+      let sens_constraints = CCList.map expr_of_sens_rel srs in
+      var_constraints @ sens_constraints
+end
