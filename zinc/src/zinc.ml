@@ -55,6 +55,7 @@ let synthesize (bm : Benchmark.t) : unit =
     (* PRINTING *)
     let _ = print_endline ("Checking: " ^ (Fterm.to_string tm)) in
     let _ = print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) in
+    let _ = CCList.iter (fun sr -> print_endline ("\t  " ^ (Sensitivity.Relation.to_string sr))) (Constraint.flatten node.Node.obligation) in
     
     (* check if tm is a solution *)
     if (Fterm.wild_closed tm) then
