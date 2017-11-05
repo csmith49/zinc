@@ -108,22 +108,6 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
     )
   | _ -> tm
 
-(* eval only works in restricted cases, should be fine by construction *)
-(* STEP *)
-(* ^ that's a big-step eval joke *)
-let rec eval (tm : t) : Value.t = match tm with
-  | App (f, arg) -> begin match (eval f) with
-      | Value.F f' -> f' (eval arg)
-      | _ -> failwith "can't apply a non-abstraction value"
-    end
-  | Abs (_, _, body) ->
-    let f = fun v -> eval (instantiate (Const v) body) in Value.F f
-  | Const v -> v
-  | Prim (_, f) -> f
-  | TyApp (TyAbs body, arg) -> eval (instantiate_dtype arg body)
-  | SensApp (SensAbs body, arg) -> eval (instantiate_sens arg body)
-  | _ -> failwith "can't evaluate provided term"
-
 (* to reference types in submodules *)
 type fterm = t
 
@@ -287,3 +271,50 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
     let dt', s'' = Dtype.to_string' dom s' in
     let body', s''' = to_string' (instantiate (Free w) body) s'' in
     ("\\" ^ (Name.to_string w) ^ ":⟨" ^ dt' ^ ", " ^ context' ^ "⟩." ^ body', s''')
+
+(* some slightly less fancy printing *)
+let rec to_raw_string : t -> string = function
+  | Free n -> Name.to_string n
+  | Bound i -> string_of_int i
+  | App (f, arg) ->
+    let f' = to_raw_string f in
+    let arg' = to_raw_string arg in
+      "App(" ^ f' ^ ", " ^ arg' ^ ")"
+  | Abs (x, dt, Sc body) -> 
+    let x' = Name.to_string x in
+    let dt' = Dtype.to_string dt in
+    let body' = to_raw_string body in
+      "Abs(" ^ x' ^ ", " ^ dt' ^ ", " ^ body' ^ ")"
+  | Const v -> Value.to_string v
+  | Prim (n, _) -> n
+  | TyApp (f, arg) ->
+    let f' = to_raw_string f in
+    let arg' = Dtype.to_string arg in
+      "TyApp(" ^ f' ^ ", " ^ arg' ^ ")"
+  | SensApp (f, arg) ->
+    let f' = to_raw_string f in
+    let arg' = Sensitivity.to_string arg in
+      "SensApp(" ^ f' ^ ", " ^ arg' ^ ")"
+  | TyAbs (Sc body) -> "TyAbs(" ^ (to_raw_string body) ^ ")"
+  | SensAbs (Sc body) -> "SensAbs(" ^ (to_raw_string body) ^ ")"
+  | Wild (c, d, Sc body) ->
+    let c' = Context.to_string c in
+    let d' = Dtype.to_string d in
+    let body' = to_raw_string body in
+      "Wild(" ^ c' ^ ", " ^ d' ^ ", " ^ body' ^ ")"
+
+(* eval only works in restricted cases, should be fine by construction *)
+(* STEP *)
+(* ^ that's a big-step eval joke *)
+let rec eval (tm : t) : Value.t = match tm with
+| App (f, arg) -> begin match (eval f) with
+    | Value.F f' -> f' (eval arg)
+    | _ -> failwith "can't apply a non-abstraction value"
+  end
+| Abs (_, _, body) ->
+  let f = fun v -> eval (instantiate (Const v) body) in Value.F f
+| Const v -> v
+| Prim (_, f) -> f
+| TyApp (f, arg) -> eval f
+| SensApp (f, arg) -> eval f
+| _ -> failwith ("can't evaluate provided term: " ^ (to_raw_string tm))

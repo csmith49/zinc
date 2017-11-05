@@ -4,6 +4,7 @@ open Inference
 (* references for command line arguments *)
 let benchmark_name = ref ""
 let verbosity = ref 1
+let pause = ref false
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
@@ -13,6 +14,7 @@ let bm_print : string -> unit = fun s -> if !verbosity >= 3 then print_string s 
 let spec_list = [
   ("-bm", Arg.Set_string benchmark_name, "Sets the benchmark to test");
   ("-v", Arg.Set_int verbosity, "Sets the level of verbosity (>= 3 for benchmarking output)");
+  ("-p", Arg.Set pause, "Pauses for input after each check");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -68,7 +70,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let meets_obligation = Strategy.check node.Node.obligation in
     
     (* if it is, then we either check for termination or expand *)
-    if meets_obligation then
+    let _ = if meets_obligation then
 
       (* PRINTING *)
       let _ = normal_print ("    Satisfiable!\n") in
@@ -95,6 +97,7 @@ let synthesize (bm : Benchmark.t) : unit =
           frontier := Frontier.push (Node.to_priority n) n !frontier) steps
     else
       normal_print ("    Unsatisfiable.\n")
+    in if !pause then (let _ = read_line () in ()) else ()
   done;;
 
 (* run the experiment, and catch the output *)

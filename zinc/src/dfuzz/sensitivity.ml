@@ -75,5 +75,5 @@ module Relation = struct
     | LEq (l, r) ->
       let l' = to_string l in
       let r' = to_string r in
-        l' ^ " = " ^ r'
+        l' ^ " <= " ^ r'
 end

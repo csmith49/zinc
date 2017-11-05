@@ -135,7 +135,7 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
         let sens' = Sensitivity.to_string sens in
         let dom', s' = to_string' dom s in
         let codom', s'' = to_string' codom s' in
-        (dom' ^ " -o[" ^ sens' ^ "] " ^ codom', s'')
+        ("(" ^ dom' ^ " -o[" ^ sens' ^ "] " ^ codom' ^ ")", s'')
     end
   | Tensor (l, r) ->
     let l', s' = to_string' l s in

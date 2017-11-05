@@ -39,5 +39,5 @@ let tbind (p : Dtype.t * Dtype.t) : Dtype.t = match fst p with
   | Dtype.Free x -> Dtype.Quant (Dtype.ForAll, Dtype.KType, Dtype.abstract x (snd p))
   | _ -> failwith "can't abstract over a non-variable"
 let sbind (p : Sensitivity.t * Dtype.t) : Dtype.t = match fst p with
-  | Sensitivity.Free x -> Dtype.Quant (Dtype.ForAll, Dtype.KType, Dtype.abstract x (snd p))
+  | Sensitivity.Free x -> Dtype.Quant (Dtype.ForAll, Dtype.KSens, Dtype.abstract x (snd p))
   | _ -> failwith "can't abstract over a non-variable"

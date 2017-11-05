@@ -7,8 +7,9 @@ type t = {
 }
 
 open Constraint.Alt
-open Dtype.Alt
 open Name.Alt
+
+open Make
 
 (* to intialize the search, we convert benchmarks to nodes *)
 let to_node : t -> Node.t = fun b -> {
@@ -30,12 +31,18 @@ let verify (tm : Fterm.t) (io : (Value.t * Value.t) list) : bool =
 (* PUT BENCHMARKS HERE *)
 let basic_example_01 = {
   name = "basic_01";
-  goal_type = s (k, real) -* real;
+  goal_type = modal (k, real) -* real;
   io_examples = [(Value.Real 0.0, Value.Real 1.0); (Value.Real 2.0, Value.Real 5.0)];
   search_grammar = Signature.Basic.signature;
 }
 
+let basic_example_02 = {
+  name = "basic_02";
+  goal_type = modal (k, mset (real, infinity)) -* int;
+  io_examples = [(Value.Bag [Value.Real 0.0; Value.Real 11.0], Value.Int 1)];
+  search_grammar = Signature.Basic.signature @ Signature.MapReduce.signature;
+}
 
 (* PUT BENCHMARK LISTS HERE *)
 
-let basic = [basic_example_01]
+let basic = [basic_example_01; basic_example_02]

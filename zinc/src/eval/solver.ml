@@ -85,7 +85,7 @@ module Basic = struct
     | Sensitivity.Mult (l, r) -> Make.mult (expr_of_sens l) (expr_of_sens r)
     | Sensitivity.Zero -> Make.rational RationalConstants.zero
     | Sensitivity.Succ s -> Make.plus (expr_of_sens s) (Make.rational RationalConstants.one)
-    | _ -> failwith "can't convert to a z3 formula"
+    | Sensitivity.Bound i -> failwith "can't convert a bound variable to a z3 formula"
 
   (* lift to constraining relations *)
   let expr_of_sens_rel : Sensitivity.Relation.t -> expr = function

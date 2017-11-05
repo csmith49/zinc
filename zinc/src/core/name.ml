@@ -36,7 +36,7 @@ let rec to_string : t -> string = fun n -> match n with
         s ^ "_" ^ (string_of_int i)
     in let uniq = match hash nm with
       | 1 -> ""
-      | (_ as u) -> "{" ^ (string_of_int u) ^ "}"
+      | (_ as u) -> "{" ^ (CCString.take 3 (string_of_int u)) ^ "}"
     in i' ^ uniq
 
 (* our comparisons deal with prefixes *)

@@ -125,12 +125,16 @@ let rec subtype_unify (root : Name.t) (vars : Name.t list) (bigger : Dtype.t) (s
       if CCList.mem m vars then (top, Sub.single m l) else (top, Sub.failure)
     | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') ->
       let dom_c, sub = subtype_unify root vars dom' dom in
-      let codom_c, sub' = subtype_unify root vars (Sub.apply sub codom) (Sub.apply sub codom') in
-      (dom_c & codom_c & (s' <= s), Sub.compose sub sub')
+      if not (Sub.is_impossible sub) then
+        let codom_c, sub' = subtype_unify root vars (Sub.apply sub codom) (Sub.apply sub codom') in
+        (dom_c & codom_c & (s' <= s), Sub.compose sub sub')
+      else (dom_c, sub)
     | Tensor (l, r), Tensor (l', r') ->
       let left_c, sub = subtype_unify root vars l l' in
-      let right_c, sub' = subtype_unify root vars (Sub.apply sub r) (Sub.apply sub r') in
-      (left_c & right_c, Sub.compose sub sub')
+      if not (Sub.is_impossible sub) then
+        let right_c, sub' = subtype_unify root vars (Sub.apply sub r) (Sub.apply sub r') in
+        (left_c & right_c, Sub.compose sub sub')
+      else (left_c, sub)
     | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
         | KSens ->
           let n = root <+ "SENS_ST_UNIFY" in

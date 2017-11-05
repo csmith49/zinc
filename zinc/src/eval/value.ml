@@ -13,4 +13,3 @@ let rec to_string : t -> string = function
   | Real r -> string_of_float r
   | F _ -> "<FUN>"
   | Bag ts -> "[" ^ (CCString.concat ", " (CCList.map to_string ts)) ^ "]"
-  | _ -> "unimplemented"

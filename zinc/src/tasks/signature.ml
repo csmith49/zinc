@@ -29,7 +29,23 @@ module Basic = struct
         | _ -> failwith "can't eval on this type")
   }
 
-  let signature = [succ; square; double]
+  let cast_int = {
+    Primitive.name = "cast";
+    Primitive.dtype = modal (one, int) -* real;
+    Primitive.source = Value.F (fun v -> match v with
+      | Value.Int i -> Value.Real (float_of_int i)
+      | _ -> failwith "can't cast a non-int");
+  }
+
+  let big = {
+    Primitive.name = "big";
+    Primitive.dtype = real => bool;
+    Primitive.source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r >= 10.0)
+      | _ -> failwith "can't check if a non-real is big");
+  }
+
+  let signature = [succ; square; double; cast_int; big]
 end
 
 (* some polymorphic functions *)
@@ -71,4 +87,6 @@ module MapReduce = struct
       | Value.Bag ts -> Value.Int (CCList.length ts)
       | _ -> failwith "can't count a non-bag");
   }
+
+  let signature = [filter; map; count]
 end
