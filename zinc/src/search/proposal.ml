@@ -3,7 +3,6 @@ type t = {
   dtype : Dtype.t;
   wildcards : Fterm.Prefix.t;
   context : Context.t;
-  variables : Name.t list;
   obligation : Constraint.t;
 }
 

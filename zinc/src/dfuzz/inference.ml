@@ -113,46 +113,43 @@ let rec unify (root : Name.t) (vars : Name.t list) (left : Dtype.t) (right : Dty
     | Base b, Base b' when b = b' -> Sub.empty
     | _ -> Sub.failure
 
-(* this one gets strange - unify assumes all sensitivities are equivalent, and makes no distinction between left and right *)
-(* now let's interleave unify and subtype - pick up constraints on sensitivities instead of assuming equality *)
-let rec subtype_unify (root : Name.t) (vars : Name.t list) (bigger : Dtype.t) (smaller : Dtype.t) : Constraint.t * Sub.t =
-  if bigger = smaller then (top, Sub.empty) else match bigger, smaller with
-    | Free n, Free m ->
-      if CCList.mem n vars then (top, Sub.failure) else (top, Sub.empty)
-    | Free n, (_ as r) ->
-      if CCList.mem n vars then (top, Sub.single n r) else (top, Sub.failure)
-    | (_ as l), Free m ->
-      if CCList.mem m vars then (top, Sub.single m l) else (top, Sub.failure)
+(* unification - assumes all sensitivities are equivalent, so build constraints appropriately *)
+let rec subtype_unify (root : Name.t) (left : Dtype.t) (right : Dtype.t) : Constraint.t * Sub.t =
+  if left = right then (top, Sub.empty) else match left, right with
+    | Free n, (_ as r) -> (top, Sub.single n r)
+    | (_ as l), Free m -> (top, Sub.single m l)
     | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') ->
-      let dom_c, sub = subtype_unify root vars dom' dom in
-      if not (Sub.is_impossible sub) then
-        let codom_c, sub' = subtype_unify root vars (Sub.apply sub codom) (Sub.apply sub codom') in
-        (dom_c & codom_c & (s' <= s), Sub.compose sub sub')
-      else (dom_c, sub)
+      let dom_c, sub = subtype_unify root dom' dom in
+      if Sub.is_impossible sub then 
+        (dom_c, sub)
+      else
+        let codom_c, sub' = subtype_unify root (Sub.apply sub codom) (Sub.apply sub codom') in
+        (dom_c & codom_c & (s' == s), Sub.compose sub sub')
     | Tensor (l, r), Tensor (l', r') ->
-      let left_c, sub = subtype_unify root vars l l' in
-      if not (Sub.is_impossible sub) then
-        let right_c, sub' = subtype_unify root vars (Sub.apply sub r) (Sub.apply sub r') in
+      let left_c, sub = subtype_unify root l l' in
+      if Sub.is_impossible sub then
+        (left_c, sub)
+      else
+        let right_c, sub' = subtype_unify root (Sub.apply sub r) (Sub.apply sub r') in
         (left_c & right_c, Sub.compose sub sub')
-      else (left_c, sub)
     | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
-        | KSens ->
-          let n = root <+ "SENS_ST_UNIFY" in
-          let free = Sensitivity.Free n in
-          let c, sub = subtype_unify n vars (instantiate_sens free body) (instantiate_sens free body') in
+      | KSens ->
+        let n = root <+ "SENS_ST_UNIFY" in
+        let free = Sensitivity.Free n in
+        let c, sub = subtype_unify n (instantiate_sens free body) (instantiate_sens free body') in
           if Sub.avoids sub n then (c, sub) else (c, Sub.failure)
-        | KType ->
-          let n = root <+ "DT_ST_UNIFY" in
-          let free = Free n in
-          let c, sub = subtype_unify n vars (instantiate free body) (instantiate free body') in
+      | KType -> 
+        let n = root <+ "DT_ST_UNIFY" in
+        let free = Free n in
+        let c, sub = subtype_unify n (instantiate free body) (instantiate free body') in
           if Sub.avoids sub n then (c, sub) else (c, Sub.failure)
-      end
+    end 
     | Precise p, Precise p' -> begin match p, p' with
-        | N s, N s' -> (s == s', Sub.empty)
-        | M (s, dt), M (s', dt') ->
-          let dt_c, sub = subtype_unify root vars dt dt' in
+      | N s, N s' -> (s == s', Sub.empty)
+      | M (s, dt), M (s', dt') ->
+        let dt_c, sub = subtype_unify root dt dt' in
           (dt_c & (s == s'), sub)
-        | R s, R s'-> (s == s', Sub.empty)
-        | _ -> (unsat, Sub.failure)
-      end
+      | R s, R s' -> (s == s', Sub.empty)
+      | _ -> (unsat, Sub.failure)
+    end
     | _ -> (unsat, Sub.failure)

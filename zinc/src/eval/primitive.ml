@@ -11,6 +11,5 @@ let to_proposal : t -> Proposal.t = fun p -> {
     Proposal.dtype = p.dtype;
     Proposal.wildcards = Rlist.Empty;
     Proposal.context = Context.Empty;
-    Proposal.variables = [];
     Proposal.obligation = Constraint.Top;
   }

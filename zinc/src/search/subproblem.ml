@@ -35,7 +35,6 @@ let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
 let rec variable_proposals (sp : t) : Proposal.t list =
   let f = fun (n, dt) -> 
     {
-      Proposal.variables = []; 
       Proposal.solution = Fterm.Free n;
       Proposal.dtype = dt;
       Proposal.wildcards = Rlist.Empty;
@@ -58,7 +57,6 @@ let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
     let context = Context.Symbolic (sp.root <+ "c") in
     let wild_bindings = Rlist.Cons (Fterm.Prefix.BWild (w, context, codom), Rlist.Empty) in
     Some {
-      Proposal.variables = [];
       Proposal.solution = Fterm.Abs (tag, dom, Fterm.Sc (Fterm.Free w));
       Proposal.dtype = sp.goal;
       Proposal.wildcards = wild_bindings;
@@ -72,16 +70,14 @@ open Constraint.Alt
 (* plugging a proposal back in to get a node *)
 (* last third of the ~> relation *)
 let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
-  let phi, sub = Inference.subtype_unify sp.root p.Proposal.variables sp.goal p.Proposal.dtype in
+  let phi, sub = Inference.subtype_unify sp.root sp.goal p.Proposal.dtype in
   if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
   Some {
     Node.root = sp.root;
     (* Node.obligation = (c_rel (p.Proposal.context =. sp.context)) & phi & p.Proposal.obligation & sp.obligation; *)
     Node.obligation = phi & p.Proposal.obligation & sp.obligation;
     Node.solution =
-      let tm = Inference.Sub.apply_fterm sub p.Proposal.solution in
-      let z = Fterm.Zipper.set tm sp.hole in
-      Fterm.Prefix.bind p.Proposal.wildcards (Fterm.Zipper.to_term z);
+      Inference.Sub.apply_fterm sub (Fterm.Prefix.bind p.Proposal.wildcards (Fterm.Zipper.to_term (Fterm.Zipper.set p.Proposal.solution sp.hole)));
   }
   else None
 
@@ -96,7 +92,6 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let f = prop.Proposal.solution in
       (* construct recursive call *)
       let p = {
-        Proposal.variables = [];
         Proposal.solution = Fterm.App (f, Fterm.Free w);
         Proposal.dtype = codom;
         Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
@@ -109,7 +104,6 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let a = root <+ "type" in
       let f = prop.Proposal.solution in
       let p = {
-        Proposal.variables = a :: prop.Proposal.variables;
         Proposal.solution = Fterm.TyApp (f, Dtype.Free a);
         Proposal.dtype = Dtype.instantiate (Dtype.Free a) body;
         Proposal.wildcards = prop.Proposal.wildcards;
@@ -122,7 +116,6 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let s = root <+ "sens" in
       let f = prop.Proposal.solution in
       let p = {
-        Proposal.variables = prop.Proposal.variables;
         Proposal.solution = Fterm.SensApp (f, Sensitivity.Free s);
         Proposal.dtype = Dtype.instantiate_sens (Sensitivity.Free s) body;
         Proposal.wildcards = prop.Proposal.wildcards;
