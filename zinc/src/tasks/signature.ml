@@ -53,9 +53,9 @@ module MapReduce = struct
   let filter = {
     Primitive.name = "filter";
     Primitive.dtype = 
-      tbind (a, sbind (s, sbind (n,
-        modal (n, modal (s, a) -* bool) -* (modal (s, mset (a, n)) -* mset (a, infinity))
-      )));
+      tbind (a, sbind (n,
+        modal (n, a => bool) -* (modal (one, mset (a, n)) -* mset (a, infinity))
+      ));
     Primitive.source = Value.F (fun v -> match v with
       | Value.F p -> Value.F (fun v -> match v with
         | Value.Bag ts -> Value.Bag (CCList.filter (fun b -> (p b) = (Value.Bool true)) ts)
