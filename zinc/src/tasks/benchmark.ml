@@ -40,7 +40,7 @@ let basic_example_02 = {
   name = "basic_02";
   goal_type = modal (k, mset (real, infinity)) -* int;
   io_examples = [(Value.Bag [Value.Real 0.0; Value.Real 11.0], Value.Int 1)];
-  search_grammar = Signature.Basic.signature @ Signature.MapReduce.signature;
+  search_grammar = Signature.Basic.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature;
 }
 
 (* PUT BENCHMARK LISTS HERE *)

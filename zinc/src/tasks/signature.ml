@@ -1,5 +1,15 @@
 open Make
 
+(* we have some utility functions for treating values a little more cleanly *)
+let binarize (f : Value.abstraction) = fun x -> fun y -> match (f x) with
+  | Value.F f' -> f' y
+  | _ -> failwith "can't binarize"
+
+let unpack_real (r : Value.t) : float = match r with
+  | Value.Real f -> f
+  | Value.Int i -> float_of_int i
+  | _ -> failwith "not a real number"
+
 (* each module will maintain several lists of primitives *)
 type t = Primitive.t list
 
@@ -77,16 +87,53 @@ module MapReduce = struct
       | _ -> failwith "can't apply a non-function mapper");
   }
 
-  let count = {
-    Primitive.name = "count";
-    Primitive.dtype =
-      tbind (a, sbind (n, 
-        modal (one, mset (a, n)) -* int
+  let reduce = {
+    Primitive.name = "reduce";
+    Primitive.dtype = 
+      sbind (s, sbind (n,
+        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded, n)) -* real)
       ));
     Primitive.source = Value.F (fun v -> match v with
+      | Value.F f -> Value.F (fun v -> match v with
+        | Value.Bag ts -> begin match ts with
+          | [] -> Value.Real 0.0
+          | _ -> CCList.fold_left (binarize f) (Value.Real 0.0) ts
+        end
+        | _ -> failwith "can't apply reduce to a non-bag")
+      | _ -> failwith "can't apply a non-function reducer"
+    );
+  }
+
+  let signature = [filter; map; reduce]
+end
+
+module Aggregate = struct
+  let count = {
+    Primitive.name = "count";
+    dtype = tbind (a, sbind (n, modal (one, mset (a, n)) -* int));
+    source = Value.F (fun v -> match v with
       | Value.Bag ts -> Value.Int (CCList.length ts)
       | _ -> failwith "can't count a non-bag");
   }
 
-  let signature = [filter; map; count]
+  let sum = {
+    Primitive.name = "sum";
+    dtype = sbind (n, modal (one, mset (bounded, n)) -* real);
+    source = Value.F (fun v -> match v with
+      | Value.Bag ts -> Value.Real (CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts))
+      | _ -> failwith "can't sum a non-bag");
+  }
+
+  let average = {
+    Primitive.name = "average";
+    dtype = sbind (n, modal (one, mset (bounded, n)) -* real);
+    source = Value.F (fun v -> match v with
+      | Value.Bag ts ->
+        let total = CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts) in
+        let count = float_of_int (CCList.length ts) in
+          Value.Real (total /. count)
+      | _ -> failwith "can't average a non-bag");
+  }
+
+  let signature = [count; sum; average]
 end
