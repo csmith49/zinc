@@ -15,11 +15,13 @@ let one : Sensitivity.t = Sensitivity.Const (Rational.of_int 1)
 let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 
 (* and type constanst *)
-let real : Dtype.t = Dtype.Base (Dtype.Real)
-let bool : Dtype.t = Dtype.Base (Dtype.Bool)
-let int : Dtype.t = Dtype.Base (Dtype.Integer)
-let bounded : Dtype.t = Dtype.Base (Dtype.Bounded)
-let row : Dtype.t = Dtype.Base (Dtype.Bounded)
+let real : Dtype.t = Dtype.Base "real"
+let bool : Dtype.t = Dtype.Base "bool"
+let int : Dtype.t = Dtype.Base "int"
+let bounded : Dtype.t = Dtype.Base "bounded"
+let row : Dtype.t = Dtype.Base "row"
+
+let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 
 (* precise type constructors *)
 let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.R s)

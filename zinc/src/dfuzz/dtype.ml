@@ -19,14 +19,15 @@ and kind =
   | KType
 and scope = Sc of t
 and modal = Modal of Sensitivity.t * t
-and base =
-  | Real
+and base = string
+  (* | Real
   | Integer
   | Bool
   | String
   | Database
   | Bounded
   | Row
+  | Discrete *)
 
 (* mcbride and mckinna *)
 let rec abstract (n : Name.t) (dt : t) : scope = Sc (abstract' n 0 dt)
@@ -143,7 +144,8 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
     let l', s' = to_string' l s in
     let r', s'' = to_string' r s' in
     ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
-  | Base b -> begin match b with
+  | Base b -> (b, s) 
+    (* begin match b with
       | Real -> ("ℝ", s)
       | Integer -> ("N", s)
       | Bool -> ("2", s)
@@ -151,7 +153,8 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
       | Database -> ("DB", s)
       | Bounded -> ("B", s)
       | Row -> ("Row", s)
-    end
+      | Discrete -> ("D", s)
+    end *)
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "∃"
   | ForAll -> "∀"
@@ -180,10 +183,6 @@ module Alt = struct
 
   (* tensor construction *)
   let ( * ) (l : t) (r : t) : t = Tensor (l, r)
-
-  (* some simple base type constructors *)
-  let real : t = Base (Real)
-  let nat : t = Base (Integer)
 
   (* sensitivity constructor *)
   let si (p : (int * t)) : modal = match p with

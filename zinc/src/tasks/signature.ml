@@ -5,10 +5,26 @@ let binarize (f : Value.abstraction) = fun x -> fun y -> match (f x) with
   | Value.F f' -> f' y
   | _ -> failwith "can't binarize"
 
+(* and pulling out reals so we can map over a list *)
 let unpack_real (r : Value.t) : float = match r with
   | Value.Real f -> f
   | Value.Int i -> float_of_int i
   | _ -> failwith "not a real number"
+
+(* we'll do a lot of projection over rows *)
+let projection (n : string) (dt : Dtype.t) : Primitive.t = {
+  Primitive.name = n;
+  dtype = row => dt;
+  source = Value.F (fun v -> match v with
+    | Value.Row r -> Value.StringMap.find n r
+    | _ -> failwith "not a row")
+}
+
+let discrete_constant (n : string) (dt : Dtype.t) : Primitive.t = {
+  Primitive.name = n;
+  dtype = dt;
+  source = Value.Discrete n;
+}
 
 (* each module will maintain several lists of primitives *)
 type t = Primitive.t list
@@ -136,4 +152,133 @@ module Aggregate = struct
   }
 
   let signature = [count; sum; average]
+end
+
+(* combinatorics for defining predicates *)
+module Predicate = struct
+  (* some simple helpers *)
+  let value_and (l : Value.t) (r : Value.t) : Value.t = match l, r with
+    | Value.Bool p, Value.Bool q -> Value.Bool (p && q)
+    | _ -> failwith "can't and non-bools"
+  let value_or (l : Value.t) (r : Value.t) : Value.t = match l, r with
+    | Value.Bool p, Value.Bool q -> Value.Bool (p && q)
+    | _ -> failwith "can't or non-bools"
+  let value_not (b : Value.t) : Value.t = match b with
+    | Value.Bool b -> Value.Bool (not b)
+    | _ -> failwith "can't not non-bools"
+
+  let pred_and = {
+    Primitive.name = "and";
+    dtype = tbind (a, 
+      (a => bool) => ((a => bool) => (a => bool))
+    );
+    source = Value.F (fun v -> match v with
+      | Value.F p1 -> Value.F (fun v -> match v with
+        | Value.F p2 -> Value.F (fun a -> value_and (p1 a) (p2 a))
+        | _ -> failwith "not a func")
+      | _ -> failwith "not a func");
+  }
+
+  let pred_or = {
+    Primitive.name = "or";
+    dtype = tbind (a, 
+      (a => bool) => ((a => bool) => (a => bool))
+    );
+    source = Value.F (fun v -> match v with
+      | Value.F p1 -> Value.F (fun v -> match v with
+        | Value.F p2 -> Value.F (fun a -> value_or (p1 a) (p2 a))
+        | _ -> failwith "not a func")
+      | _ -> failwith "not a func");
+  }
+
+  let pred_not = {
+    Primitive.name = "not";
+    dtype = tbind (a,
+      (a => bool) => (a => bool)
+    );
+    source = Value.F (fun v -> match v with
+      | Value.F p -> Value.F (value_not)
+      | _ -> failwith "not a func");
+  }
+
+  let signature = [pred_and; pred_or; pred_not]
+end
+
+module Constants = struct
+  let value_true = {
+    Primitive.name = "true";
+    dtype = bool;
+    source = Value.Bool true
+  }
+  let value_false = {
+    Primitive.name = "false";
+    dtype = bool;
+    source = Value.Bool false;
+  }
+
+  let signature = [value_true; value_false]
+end
+
+module Database = struct
+  let compare = {
+    Primitive.name = "compare";
+    Primitive.dtype = tbind (a, row => ((row => a) => (a => bool)));
+    Primitive.source = Value.F (fun v -> match v with
+      | Value.Row r -> Value.F (fun v -> match v with
+        | Value.F p -> Value.F (fun v -> Value.Bool (p (Value.Row r) == v))
+        | _ -> failwith "not a function")
+      | _ -> failwith "not a row");
+  }
+
+  let signature = [compare]
+end
+
+(* signature for ADULT benchmarks *)
+module Adult = struct
+  (* the dtype encodings *)
+  let gender_t = constant_type "Gender"
+  let race_t = constant_type "Race"
+  let hours_t = constant_type "Hours"
+  let profession_t = constant_type "Profession"
+  let work_class_t = constant_type "Work Class"
+
+  (* all the keys in our dataset *)
+  let gt_50k = projection "gt_50k" bool
+  let gender = projection "gender" gender_t
+  let race = projection "race" race_t
+  let work_hours = projection "work_hours" hours_t
+  let education_level = projection "education_level" int
+  let profession = projection "profession" profession_t
+  let work_class = projection "work_class" work_class_t
+  let capital_gains = projection "capital_gains" int
+
+  let keys = [gt_50k; race; gender; work_hours; education_level; profession; work_class; capital_gains]
+
+  (* and the relevant constants *)
+  let male = discrete_constant "male" gender_t
+  let female = discrete_constant "female" gender_t
+
+  let white = discrete_constant "white" race_t
+  let black = discrete_constant "black" race_t
+  let other = discrete_constant "other" race_t
+
+  let farmer = discrete_constant "farmer" profession_t
+  let army = discrete_constant "army" profession_t
+  let trade = discrete_constant "trade" profession_t
+  
+  let private_sector = discrete_constant "private" work_class_t
+  let federal_gov = discrete_constant "federal" work_class_t
+  let state_gov = discrete_constant "state" work_class_t
+  let local_gov = discrete_constant "local" work_class_t
+
+  let constants = [male; female; white; black; other; farmer; army; trade; private_sector; federal_gov; state_gov; local_gov]
+
+  (* with a simple conversion *)
+  let hours_to_int = {
+    Primitive.name = "hours_to_int";
+    dtype = modal (Sensitivity.Const (Rational.of_int 168), hours_t) -* int;
+    source = Value.F (fun v -> v);
+  }
+
+  let signature = hours_to_int :: (keys @ constants)
 end
