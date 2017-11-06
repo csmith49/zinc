@@ -14,11 +14,11 @@ let bm_print : string -> unit = fun s -> if !verbosity >= 3 then print_string s 
 
 (* the actual command line arguments *)
 let spec_list = [
-  ("-bm", Arg.Set_string benchmark_name, "Sets the benchmark to test");
-  ("-v", Arg.Set_int verbosity, "Sets the level of verbosity (>= 3 for benchmarking output)");
-  ("-p", Arg.Set pause, "Pauses for input after each check");
-  ("-t", Arg.Set time_it, "Enables timing");
-  ("-d", Arg.Set dont_prune, "Disables SAT-pruning");
+  ("-bm", Arg.Set_string benchmark_name, " Sets the benchmark to test");
+  ("-v", Arg.Set_int verbosity, " Sets the level of verbosity (>= 3 for benchmarking output)");
+  ("-pause", Arg.Set pause, " Pauses for input after each check");
+  ("-time", Arg.Set time_it, " Enables timing");
+  ("-disable", Arg.Set dont_prune, " Disables SAT-pruning");
 ]
 
 (* populate the references - no anonymous functions *)
