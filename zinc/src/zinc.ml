@@ -5,6 +5,7 @@ open Inference
 let benchmark_name = ref ""
 let verbosity = ref 1
 let pause = ref false
+let time_it = ref false
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
@@ -15,6 +16,7 @@ let spec_list = [
   ("-bm", Arg.Set_string benchmark_name, "Sets the benchmark to test");
   ("-v", Arg.Set_int verbosity, "Sets the level of verbosity (>= 3 for benchmarking output)");
   ("-p", Arg.Set pause, "Pauses for input after each check");
+  ("-t", Arg.Set time_it, "Enables timing");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -44,6 +46,9 @@ exception SynthSuccess of Fterm.t
 
 (* we use a counter for stat-keeping purposes, and for making sure node roots are unique *)
 let counter = ref 0
+(* we also maintain timers, for obvious purposes *)
+let sat_time = ref 0.0
+let total_time = ref 0.0
 
 open Name.Alt
 
@@ -63,12 +68,19 @@ let synthesize (bm : Benchmark.t) : unit =
     let tm = node.Node.solution in
     let _ = counter := !counter + 1 in
 
+    let start_time = Sys.time () in
+
     (* PRINTING *)
     let _ = normal_print ("Checking: " ^ (Fterm.to_string tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
     
     (* check if the obligation is satisfiable *)
     let meets_obligation = Strategy.check node.Node.obligation in
     
+    (* update the timer *)
+    let sat_check_time = (Sys.time()) -. start_time in 
+    let _ = sat_time := sat_check_time +. !sat_time in
+    let _ = if !time_it then normal_print ("    SAT check time: " ^ (string_of_float sat_check_time) ^ "\n") else () in
+
     (* if it is, then we either check for termination or expand *)
     let _ = if meets_obligation then
 
@@ -78,7 +90,9 @@ let synthesize (bm : Benchmark.t) : unit =
       (* check if tm is a solution *)
       if (Fterm.wild_closed tm) then
         let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
-        if meets_examples then raise (SynthSuccess tm) else ()
+        if meets_examples then 
+          let _ = total_time := ((Sys.time ()) -. start_time) +. !total_time in raise (SynthSuccess tm) 
+        else ()
       
       (* if not, and there's a wild binder, find all expansions *)
       else
@@ -90,16 +104,26 @@ let synthesize (bm : Benchmark.t) : unit =
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
           let ans = Subproblem.insert_proposal p subproblem in
-          let _ = normal_print ("\tEx: " ^ (Proposal.to_string p) ^ "..." ^ (Constraint.to_string p.Proposal.obligation) ^ "..." ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
+          let _ = normal_print ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         
         CCList.iter (fun n -> 
           frontier := Frontier.push (Node.to_priority n) n !frontier) steps
     else
       normal_print ("    Unsatisfiable.\n")
-    in if !pause then (let _ = read_line () in ()) else ()
+    in let _ = if !pause then (let _ = read_line () in ()) else () in
+
+    (* update total printer *)
+    let total_check_time = (Sys.time ()) -. start_time in
+    let _ = total_time := total_check_time +. !total_time in
+    let _ = if !time_it then (normal_print ("    Total time: " ^ (string_of_float total_check_time) ^ "\n")) in
+    ()
   done;;
 
 (* run the experiment, and catch the output *)
 try synthesize benchmark with
-  | SynthSuccess tm -> print_endline ("Solution found: " ^ (Fterm.to_string tm))
+  | SynthSuccess tm -> 
+    let _ = print_endline ("Solution found: " ^ (Fterm.to_string tm)) in
+    let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
+    let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
+    ()
