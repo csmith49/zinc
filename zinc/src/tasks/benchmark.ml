@@ -43,6 +43,16 @@ let basic_example_02 = {
   search_grammar = Signature.Basic.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature;
 }
 
+(* ADULTS *)
+let adult_01 = {
+  name = "adult_01";
+  goal_type = modal (k, mset (row, infinity)) -* real;
+  io_examples = [];
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Predicate.signature @ Signature.Constants.signature;
+}
+
 (* PUT BENCHMARK LISTS HERE *)
 
 let basic = [basic_example_01; basic_example_02]
+
+let adult = [adult_01]

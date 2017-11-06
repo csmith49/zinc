@@ -20,3 +20,10 @@ let rec to_string : t -> string = function
   | Bag ts -> "[" ^ (CCString.concat ", " (CCList.map to_string ts)) ^ "]"
   | Row r -> "ROW"
   | Discrete d -> d
+
+(* making simple values *)
+let rec row_of_list : (string * t) list -> t = function
+  | [] -> Row StringMap.empty
+  | (s, v) :: vs -> match row_of_list vs with
+    | Row row -> Row (StringMap.add s v row)
+    | _ -> failwith "shouldn't happen"

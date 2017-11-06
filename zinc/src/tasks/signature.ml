@@ -280,5 +280,10 @@ module Adult = struct
     source = Value.F (fun v -> v);
   }
 
+  (* the total signature *)
   let signature = hours_to_int :: (keys @ constants)
+
+  (* and a utility for constructing examples *)
+  let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
+  let make (vs : Value.t list) : Value.t = Value.row_of_list (CCList.combine schema vs)
 end
