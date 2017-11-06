@@ -6,6 +6,7 @@ let benchmark_name = ref ""
 let verbosity = ref 1
 let pause = ref false
 let time_it = ref false
+let dont_prune = ref false
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
@@ -17,6 +18,7 @@ let spec_list = [
   ("-v", Arg.Set_int verbosity, "Sets the level of verbosity (>= 3 for benchmarking output)");
   ("-p", Arg.Set pause, "Pauses for input after each check");
   ("-t", Arg.Set time_it, "Enables timing");
+  ("-d", Arg.Set dont_prune, "Disables SAT-pruning");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -74,7 +76,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = normal_print ("Checking: " ^ (Fterm.to_string tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
     
     (* check if the obligation is satisfiable *)
-    let meets_obligation = Strategy.check node.Node.obligation in
+    let meets_obligation = if !dont_prune then true else Strategy.check node.Node.obligation in
     
     (* update the timer *)
     let sat_check_time = (Sys.time()) -. start_time in 
