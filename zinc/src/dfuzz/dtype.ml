@@ -25,6 +25,7 @@ and base =
   | Bool
   | String
   | Database
+  | Bounded
 
 (* mcbride and mckinna *)
 let rec abstract (n : Name.t) (dt : t) : scope = Sc (abstract' n 0 dt)
@@ -147,6 +148,7 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
       | Bool -> ("2", s)
       | String -> ("Str", s)
       | Database -> ("DB", s)
+      | Bounded -> ("B", s)
     end
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "∃"

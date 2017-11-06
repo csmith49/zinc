@@ -18,6 +18,7 @@ let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 let real : Dtype.t = Dtype.Base (Dtype.Real)
 let bool : Dtype.t = Dtype.Base (Dtype.Bool)
 let int : Dtype.t = Dtype.Base (Dtype.Integer)
+let bounded : Dtype.t = Dtype.Base (Dtype.Bounded)
 
 (* precise type constructors *)
 let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.R s)
