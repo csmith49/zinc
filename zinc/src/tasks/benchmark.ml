@@ -14,7 +14,7 @@ open Make
 (* to intialize the search, we convert benchmarks to nodes *)
 let to_node : t -> Node.t = fun b -> {
     Node.root = Name.of_string "start";
-    Node.obligation = (k <= (num 10));
+    Node.obligation = (k <= (num 168));
     Node.solution =
       let context = Context.Empty in
       let dtype = b.goal_type in
@@ -44,11 +44,29 @@ let basic_example_02 = {
 }
 
 (* ADULTS *)
+(* ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"] *)
+let adult_dataset = Value.Bag [
+  Signature.Adult.make [
+    Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 40.0; 
+    Value.Int 12; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 ];
+  Signature.Adult.make [
+    Value.Bool true; Value.Discrete "female"; Value.Discrete "other"; Value.Real 20.0;
+    Value.Int 10; Value.Discrete "agriculture"; Value.Discrete "local"; Value.Real 0.0 ];
+  Signature.Adult.make [
+    Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 45.0;
+    Value.Int 14; Value.Discrete "agriculture"; Value.Discrete "federal"; Value.Real 200.00 ];
+  Signature.Adult.make [
+    Value.Bool true; Value.Discrete "female"; Value.Discrete "other"; Value.Real 60.0;
+    Value.Int 6; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 ];
+  ]
+
 let adult_01 = {
   name = "adult_01";
-  goal_type = modal (k, mset (row, infinity)) -* real;
-  io_examples = [];
-  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Predicate.signature @ Signature.Constants.signature;
+  goal_type = modal (k, mset (row, infinity)) -* int;
+  io_examples = [
+    (adult_dataset, Value.Int 2)
+  ];
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature;
 }
 
 (* PUT BENCHMARK LISTS HERE *)
@@ -56,3 +74,5 @@ let adult_01 = {
 let basic = [basic_example_01; basic_example_02]
 
 let adult = [adult_01]
+
+let all = adult @ basic

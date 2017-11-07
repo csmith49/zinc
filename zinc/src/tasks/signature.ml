@@ -120,7 +120,7 @@ module MapReduce = struct
     );
   }
 
-  let signature = [filter; map; reduce]
+  let signature = [filter; reduce]
 end
 
 module Aggregate = struct
@@ -274,14 +274,31 @@ module Adult = struct
   let constants = [male; female; white; black; other; farmer; army; trade; private_sector; federal_gov; state_gov; local_gov]
 
   (* with a simple conversion *)
-  let hours_to_int = {
-    Primitive.name = "hours_to_int";
-    dtype = modal (Sensitivity.Const (Rational.of_int 168), hours_t) -* int;
+  let hours_to_value = {
+    Primitive.name = "hours_to_value";
+    dtype = modal (Sensitivity.Const (Rational.of_int 168), hours_t) -* real;
     source = Value.F (fun v -> v);
   }
 
+  (* and some simple predicates for the search *)
+  let gt_40_hrs = {
+    Primitive.name = "gt_40_hrs";
+    dtype = hours_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r >= 40.0)
+      | _ -> failwith "not an hour");
+  }
+  let is_female = {
+    Primitive.name = "is_female";
+    dtype = gender_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "female")
+      | _ -> failwith "not a gender");
+  }
+
   (* the total signature *)
-  let signature = hours_to_int :: (keys @ constants)
+  (* let signature = gt_40_hrs :: is_female :: (keys @ constants) *)
+  let signature = gt_40_hrs :: is_female :: keys
 
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
