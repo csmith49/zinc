@@ -272,6 +272,38 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
     let body', s''' = to_string' (instantiate (Free w) body) s'' in
     ("\\" ^ (Name.to_string w) ^ ":⟨" ^ dt' ^ ", " ^ context' ^ "⟩." ^ body', s''')
 
+(* printing that ignores all the type annotations on terms *)
+let rec to_clean_string : t -> string =
+  fun tm ->
+    let stream = Name.Stream.of_root Rlist.Empty in
+    fst (to_clean_string' tm stream)
+and to_clean_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm with
+  | Free n -> (Name.to_string n, s)
+  | Bound i -> (string_of_int i, s)
+  | Abs (_, dt, body) ->
+    let x, s' = Name.Stream.draw_abs s in
+    let body', s'' = to_clean_string' (instantiate (Free x) body) s' in
+    ("λ" ^ (Name.to_string x) ^ "." ^ body', s'')
+  | App (l, r) ->
+    let l', s' = to_clean_string' l s in
+    let r', s'' = to_clean_string' r s' in
+    (l' ^ " (" ^ r' ^ ")", s'')
+  | TyAbs body ->
+    let a, s' = Name.Stream.draw_dt s in
+    let body', s'' = to_clean_string' (instantiate_dtype (Dtype.Free a) body) s' in
+    ("Λ" ^ (Name.to_string a) ^ "." ^ body', s'')
+  | TyApp (f, dt) -> to_clean_string' f s
+  | SensAbs body ->
+    let k, s' = Name.Stream.draw_sens s in
+    let body', s'' = to_clean_string' (instantiate_sens (Sensitivity.Free k) body) s' in
+    ("\\" ^ (Name.to_string k) ^ "." ^ body', s'')
+  | SensApp (f, sens) -> to_clean_string' f s
+  | Const c -> (Value.to_string c, s)
+  | Prim (n, src) -> (n, s)
+  | Wild (context, dom, body) ->
+    let w, s' = Name.Stream.draw_wild s in
+    to_clean_string' (instantiate (Free w) body) s'
+
 (* some slightly less fancy printing *)
 let rec to_raw_string : t -> string = function
   | Free n -> Name.to_string n
@@ -302,6 +334,7 @@ let rec to_raw_string : t -> string = function
     let d' = Dtype.to_string d in
     let body' = to_raw_string body in
       "Wild(" ^ c' ^ ", " ^ d' ^ ", " ^ body' ^ ")"
+
 
 (* eval only works in restricted cases, should be fine by construction *)
 (* STEP *)

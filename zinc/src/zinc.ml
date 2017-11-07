@@ -7,10 +7,14 @@ let verbosity = ref 1
 let pause = ref false
 let time_it = ref false
 let dont_prune = ref false
+let dont_annotate = ref false
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
 let bm_print : string -> unit = fun s -> if !verbosity >= 3 then print_string s else ()
+
+let string_of_fterm : Fterm.t -> string = fun tm -> 
+  if !dont_annotate then Fterm.to_clean_string tm else Fterm.to_string tm
 
 (* the actual command line arguments *)
 let spec_list = [
@@ -19,6 +23,7 @@ let spec_list = [
   ("-pause", Arg.Set pause, " Pauses for input after each check");
   ("-time", Arg.Set time_it, " Enables timing");
   ("-disable", Arg.Set dont_prune, " Disables SAT-pruning");
+  ("-annotations", Arg.Set dont_annotate, " Disables type annotations on term output")
 ]
 
 (* populate the references - no anonymous functions *)
@@ -34,7 +39,7 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
   | _ -> failwith ("can't find provided benchmark: " ^ name)
 
 (* pull the benchmark from the arguments *)
-let benchmark = extract_benchmark !benchmark_name Benchmark.basic
+let benchmark = extract_benchmark !benchmark_name Benchmark.all
 
 (* construct the strategy *)
 module Strategy = Solver.Strategy(Solver.Basic)
@@ -73,7 +78,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let start_time = Sys.time () in
 
     (* PRINTING *)
-    let _ = normal_print ("Checking: " ^ (Fterm.to_string tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
+    let _ = normal_print ("Checking: " ^ (string_of_fterm tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
     
     (* check if the obligation is satisfiable *)
     let meets_obligation = if !dont_prune then true else Strategy.check node.Node.obligation in
@@ -125,7 +130,7 @@ let synthesize (bm : Benchmark.t) : unit =
 (* run the experiment, and catch the output *)
 try synthesize benchmark with
   | SynthSuccess tm -> 
-    let _ = print_endline ("Solution found: " ^ (Fterm.to_string tm)) in
+    let _ = print_endline ("Solution found: " ^ (string_of_fterm tm)) in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
     ()
