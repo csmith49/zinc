@@ -8,6 +8,7 @@ let pause = ref false
 let time_it = ref false
 let dont_prune = ref false
 let dont_annotate = ref false
+let strategy = ref "fancy"
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
@@ -23,7 +24,8 @@ let spec_list = [
   ("-pause", Arg.Set pause, " Pauses for input after each check");
   ("-time", Arg.Set time_it, " Enables timing");
   ("-disable", Arg.Set dont_prune, " Disables SAT-pruning");
-  ("-annotations", Arg.Set dont_annotate, " Disables type annotations on term output")
+  ("-annotations", Arg.Set dont_annotate, " Disables type annotations on term output");
+  ("-strat", Arg.Set_string strategy, " Sets the SAT strategy");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -42,7 +44,14 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
 let benchmark = extract_benchmark !benchmark_name Benchmark.all
 
 (* construct the strategy *)
-module Strategy = Solver.Strategy(Solver.Basic)
+module BasicStrategy = Solver.Strategy(Solver.Basic)
+module FancyStrategy = Solver.Strategy(Solver.Fancy)
+
+
+let check : Constraint.t -> bool = match !strategy with
+  | "basic" -> BasicStrategy.check
+  | "fancy" -> FancyStrategy.check
+  | _ -> FancyStrategy.check
 
 (* consruct the frontier from the benchmarks start position *)
 module Frontier = Pqueue.Make(Node.Priority)
@@ -81,7 +90,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = normal_print ("Checking: " ^ (string_of_fterm tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
     
     (* check if the obligation is satisfiable *)
-    let meets_obligation = if !dont_prune then true else Strategy.check node.Node.obligation in
+    let meets_obligation = if !dont_prune then true else check node.Node.obligation in
     
     (* update the timer *)
     let sat_check_time = (Sys.time()) -. start_time in 
@@ -107,6 +116,8 @@ let synthesize (bm : Benchmark.t) : unit =
         let subproblem = Subproblem.of_node (root <+ "w") node in
         let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) in
       
+        let _ = normal_print ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal) ^ "\n") in
+
         let f = fun p -> Subproblem.specialize root p subproblem.Subproblem.context in
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
