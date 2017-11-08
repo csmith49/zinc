@@ -45,34 +45,75 @@ let basic_example_02 = {
 
 (* ADULTS *)
 (* ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"] *)
-let adult_dataset = Value.Bag [
-  Signature.Adult.make [
-    Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 40.0; 
-    Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 ];
-  Signature.Adult.make [
-    Value.Bool true; Value.Discrete "female"; Value.Discrete "other"; Value.Real 20.0;
-    Value.Real 10.0; Value.Discrete "army"; Value.Discrete "local"; Value.Real 0.0 ];
-  Signature.Adult.make [
-    Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 45.0;
-    Value.Real 14.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 200.00 ];
-  Signature.Adult.make [
-    Value.Bool true; Value.Discrete "female"; Value.Discrete "other"; Value.Real 60.0;
-    Value.Real 6.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 ];
-  ]
 
+(* number of women who work more than 40 hrs a week *)
 let adult_01 = {
   name = "adult_01";
   goal_type = modal (k, mset (row, infinity)) -* int;
   io_examples = [
-    (adult_dataset, Value.Int 2)
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 40.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
+      ];], Value.Int 1);
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 13.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
+      ];], Value.Int 0);
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "male"; Value.Discrete "white"; Value.Real 40.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
+      ];], Value.Int 0);
   ];
   search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
 }
+(* cumulative education level in the army *)
 let adult_02 = {
   name = "adult_02";
   goal_type = modal (k, mset (row, infinity)) -* real;
   io_examples = [
-    (adult_dataset, Value.Real 24.0);
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 0.0 
+      ];], Value.Real 12.0);
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+      ];], Value.Real 24.0);
+  ];
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
+}
+(* number of people in trade who make more than 50k *)
+let adult_03 = {
+  name = "adult_03";
+  goal_type = modal (k, mset (row, infinity)) -* int;
+  io_examples = [
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 0.0 
+      ];], Value.Int 0);
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool false; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+      ];], Value.Int 2);
   ];
   search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
 }
@@ -81,6 +122,6 @@ let adult_02 = {
 
 let basic = [basic_example_01; basic_example_02]
 
-let adult = [adult_01; adult_02]
+let adult = [adult_01; adult_02; adult_03]
 
 let all = adult @ basic

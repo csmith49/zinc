@@ -289,9 +289,16 @@ module Adult = struct
       | Value.Discrete s -> Value.Bool (s = "army")
       | _ -> failwith "not a profession");
   }
+  let is_trade = {
+    Primitive.name = "is_trade";
+    dtype = profession_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "trade")
+      | _ -> failwith "not a profession")
+  }
 
   (* the total signature *)
-  let signature = gt_40_hrs :: is_female ::is_army :: education_to_value :: keys
+  let signature = gt_40_hrs :: is_female ::is_army :: is_trade :: education_to_value :: keys
   
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
