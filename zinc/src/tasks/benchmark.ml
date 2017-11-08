@@ -49,25 +49,25 @@ let basic_example_02 = {
 (* number of women who work more than 40 hrs a week *)
 let adult_01 = {
   name = "adult_01";
-  goal_type = modal (k, mset (row, infinity)) -* int;
+  goal_type = modal (k, mset (row, infinity)) -* real;
   io_examples = [
     (Value.Bag 
       [Signature.Adult.make [
         Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 40.0; 
         Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
-      ];], Value.Int 1);
+      ];], Value.Real 1.0);
     (Value.Bag 
       [Signature.Adult.make [
         Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 13.0; 
         Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
-      ];], Value.Int 0);
+      ];], Value.Real 0.0);
     (Value.Bag 
       [Signature.Adult.make [
         Value.Bool true; Value.Discrete "male"; Value.Discrete "white"; Value.Real 40.0; 
         Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "private"; Value.Real 10000.0 
-      ];], Value.Int 0);
+      ];], Value.Real 0.0);
   ];
-  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature @ Signature.Arithmetic.signature;
 }
 (* cumulative education level in the army *)
 let adult_02 = {
@@ -91,18 +91,18 @@ let adult_02 = {
         Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
       ];], Value.Real 24.0);
   ];
-  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature @ Signature.Arithmetic.signature;
 }
 (* number of people in trade who make more than 50k *)
 let adult_03 = {
   name = "adult_03";
-  goal_type = modal (k, mset (row, infinity)) -* int;
+  goal_type = modal (k, mset (row, infinity)) -* real;
   io_examples = [
     (Value.Bag 
       [Signature.Adult.make [
         Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
         Value.Real 12.0; Value.Discrete "army"; Value.Discrete "federal"; Value.Real 0.0 
-      ];], Value.Int 0);
+      ];], Value.Real 0.0);
     (Value.Bag 
       [Signature.Adult.make [
         Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
@@ -113,9 +113,9 @@ let adult_03 = {
       ]; Signature.Adult.make [
         Value.Bool false; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
         Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
-      ];], Value.Int 2);
+      ];], Value.Real 2.0);
   ];
-  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature;
+  search_grammar = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature @ Signature.Database.signature @ Signature.Arithmetic.signature;
 }
 
 (* PUT BENCHMARK LISTS HERE *)

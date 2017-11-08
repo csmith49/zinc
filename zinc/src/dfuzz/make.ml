@@ -15,7 +15,7 @@ let one : Sensitivity.t = Sensitivity.Const (Rational.of_int 1)
 let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 
 (* and type constanst *)
-let real : Dtype.t = Dtype.Base "real"
+let real : Dtype.t = Dtype.Precise (Dtype.R (Sensitivity.Const (Rational.Infinity)))
 let bool : Dtype.t = Dtype.Base "bool"
 let int : Dtype.t = Dtype.Base "int"
 let bounded : Dtype.t = Dtype.Base "bounded"

@@ -96,7 +96,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
         Proposal.dtype = codom;
         Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
         Proposal.context = c;
-        Proposal.obligation = c_rel (c =. (prop.Proposal.context +. (s *. c_wild)));
+        Proposal.obligation = prop.Proposal.obligation & c_rel (c =. (prop.Proposal.context +. (s *. c_wild)));
       } in specialize root p context
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
       let root = root <+ "step_tyabs" in

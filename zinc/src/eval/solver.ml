@@ -1,11 +1,17 @@
 open CCFun
 open Z3
 
+(* some constants we use to construct contexts *)
+let config = [
+  ("timeout", "200");
+  ("auto_config", "true");
+]
+
 (* alias to simplify some type expressions *)
 type expr = Expr.expr
 
 (* what arguments might we put here? *)
-let context = mk_context []
+let context = mk_context config
 
 (* some arguments - like the rational values - must be bounded *)
 (* this is how we code infinity *)
@@ -72,8 +78,8 @@ module Strategy = functor (S : STRATEGY) -> struct
     let _ = Z3.Solver.reset solver in
     let _ = Z3.Solver.add solver [propositional] in
     match Z3.Solver.check solver [p] with
-      | Z3.Solver.SATISFIABLE -> true
-      | _ -> false
+      | Z3.Solver.UNSATISFIABLE -> false
+      | _ -> true
 end
 
 (* here we describe strategies *)

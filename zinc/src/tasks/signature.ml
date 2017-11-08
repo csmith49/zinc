@@ -126,9 +126,9 @@ end
 module Aggregate = struct
   let count = {
     Primitive.name = "count";
-    dtype = tbind (a, sbind (n, modal (one, mset (a, n)) -* int));
+    dtype = tbind (a, sbind (n, modal (one, mset (a, n)) -* real));
     source = Value.F (fun v -> match v with
-      | Value.Bag ts -> Value.Int (CCList.length ts)
+      | Value.Bag ts -> Value.Real (float_of_int (CCList.length ts))
       | _ -> failwith "can't count a non-bag");
   }
 
@@ -303,4 +303,43 @@ module Adult = struct
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
   let make (vs : Value.t list) : Value.t = Value.row_of_list (CCList.combine schema vs)
+end
+
+(* arithmetic *)
+module Arithmetic = struct
+  let add = {
+    Primitive.name = "add";
+    dtype = sbind (s, sbind (n,
+      modal (one, real) -* (modal (one, real) -* real)
+    ));
+    source = Value.F (fun v -> match v with
+      | Value.Real l -> Value.F (fun v -> match v with
+        | Value.Real r -> Value.Real (l +. r)
+        | _ -> failwith "not a number")
+      | _ -> failwith "not a number");
+  }
+  let mult = {
+    Primitive.name = "mult";
+    dtype = sbind (s, sbind (n,
+      modal (s, p_real n) -* (modal (n, p_real s) -* real)
+    ));
+    source = Value.F (fun v -> match v with
+      | Value.Real l -> Value.F (fun v -> match v with
+        | Value.Real r -> Value.Real (l *. r)
+        | _ -> failwith "not a number")
+      | _ -> failwith "not a number");
+  }
+  let bad_mult = {
+    Primitive.name = "bad_mult";
+    dtype = sbind (s, sbind (n,
+      (p_real s) => ( (p_real n) => real)
+    ));
+    source = Value.F (fun v -> match v with
+    | Value.Real l -> Value.F (fun v -> match v with
+      | Value.Real r -> Value.Real (l *. r)
+      | _ -> failwith "not a number")
+    | _ -> failwith "not a number");
+  }
+
+  let signature = [add; mult]
 end

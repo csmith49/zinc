@@ -124,7 +124,7 @@ let rec subtype_unify (root : Name.t) (left : Dtype.t) (right : Dtype.t) : Const
         (dom_c, sub)
       else
         let codom_c, sub' = subtype_unify root (Sub.apply sub codom) (Sub.apply sub codom') in
-        (dom_c & codom_c & (s' == s), Sub.compose sub sub')
+        (dom_c & codom_c & (s' <= s), Sub.compose sub sub')
     | Tensor (l, r), Tensor (l', r') ->
       let left_c, sub = subtype_unify root l l' in
       if Sub.is_impossible sub then

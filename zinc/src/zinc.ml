@@ -142,6 +142,7 @@ let synthesize (bm : Benchmark.t) : unit =
 try synthesize benchmark with
   | SynthSuccess tm -> 
     let _ = print_endline ("Solution found: " ^ (string_of_fterm tm)) in
+    let _ = bm_print ("Solutions explored: " ^ (string_of_int !counter) ^ "\n") in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
     ()
