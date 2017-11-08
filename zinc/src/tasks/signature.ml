@@ -120,7 +120,7 @@ module MapReduce = struct
     );
   }
 
-  let signature = [filter; reduce]
+  let signature = [filter; map; reduce]
 end
 
 module Aggregate = struct
@@ -197,7 +197,7 @@ module Predicate = struct
       (a => bool) => (a => bool)
     );
     source = Value.F (fun v -> match v with
-      | Value.F p -> Value.F (value_not)
+      | Value.F p -> Value.F (fun v -> value_not (p v))
       | _ -> failwith "not a func");
   }
 
@@ -241,42 +241,29 @@ module Adult = struct
   let hours_t = constant_type "Hours"
   let profession_t = constant_type "Profession"
   let work_class_t = constant_type "Work Class"
+  let education_t = constant_type "Education"
 
   (* all the keys in our dataset *)
   let gt_50k = projection "gt_50k" bool
   let gender = projection "gender" gender_t
   let race = projection "race" race_t
   let work_hours = projection "work_hours" hours_t
-  let education_level = projection "education_level" int
+  let education_level = projection "education_level" education_t
   let profession = projection "profession" profession_t
   let work_class = projection "work_class" work_class_t
-  let capital_gains = projection "capital_gains" int
+  let capital_gains = projection "capital_gains" real
 
   let keys = [gt_50k; race; gender; work_hours; education_level; profession; work_class; capital_gains]
 
-  (* and the relevant constants *)
-  let male = discrete_constant "male" gender_t
-  let female = discrete_constant "female" gender_t
-
-  let white = discrete_constant "white" race_t
-  let black = discrete_constant "black" race_t
-  let other = discrete_constant "other" race_t
-
-  let farmer = discrete_constant "farmer" profession_t
-  let army = discrete_constant "army" profession_t
-  let trade = discrete_constant "trade" profession_t
-  
-  let private_sector = discrete_constant "private" work_class_t
-  let federal_gov = discrete_constant "federal" work_class_t
-  let state_gov = discrete_constant "state" work_class_t
-  let local_gov = discrete_constant "local" work_class_t
-
-  let constants = [male; female; white; black; other; farmer; army; trade; private_sector; federal_gov; state_gov; local_gov]
-
-  (* with a simple conversion *)
+  (* with simple conversions *)
   let hours_to_value = {
     Primitive.name = "hours_to_value";
     dtype = modal (Sensitivity.Const (Rational.of_int 168), hours_t) -* real;
+    source = Value.F (fun v -> v);
+  }
+  let education_to_value = {
+    Primitive.name = "edu_to_value";
+    dtype = modal (Sensitivity.Const (Rational.of_int 20), education_t) -* bounded;
     source = Value.F (fun v -> v);
   }
 
@@ -295,11 +282,17 @@ module Adult = struct
       | Value.Discrete s -> Value.Bool (s = "female")
       | _ -> failwith "not a gender");
   }
+  let is_army = {
+    Primitive.name = "is_army";
+    dtype = profession_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "army")
+      | _ -> failwith "not a profession");
+  }
 
   (* the total signature *)
-  (* let signature = gt_40_hrs :: is_female :: (keys @ constants) *)
-  let signature = gt_40_hrs :: is_female :: keys
-
+  let signature = gt_40_hrs :: is_female ::is_army :: education_to_value :: keys
+  
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
   let make (vs : Value.t list) : Value.t = Value.row_of_list (CCList.combine schema vs)
