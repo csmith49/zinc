@@ -74,7 +74,7 @@ let synthesize (bm : Benchmark.t) : unit =
   (* generate start node and initialize frontier *)
   let start_node = Benchmark.to_node bm in
   let _ = frontier := Frontier.push (Node.to_priority start_node) start_node !frontier in
-  let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.search_grammar in
+  let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.grammar in
   
   (* repeatedly pull nodes and check for satisfiability *)
   while true do
@@ -105,7 +105,7 @@ let synthesize (bm : Benchmark.t) : unit =
 
       (* check if tm is a solution *)
       if (Fterm.wild_closed tm) then
-        let meets_examples = Benchmark.verify tm bm.Benchmark.io_examples in
+        let meets_examples = Benchmark.verify tm bm in
         if meets_examples then 
           let _ = total_time := ((Sys.time ()) -. start_time) +. !total_time in raise (SynthSuccess tm) 
         else ()

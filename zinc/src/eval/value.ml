@@ -27,3 +27,10 @@ let rec row_of_list : (string * t) list -> t = function
   | (s, v) :: vs -> match row_of_list vs with
     | Row row -> Row (StringMap.add s v row)
     | _ -> failwith "shouldn't happen"
+
+(* we need comparisons *)
+let compare (l : t) (r : t) : int = match l, r with
+  | Real l, Real r -> Pervasives.compare l r
+  | _ -> Pervasives.compare l r
+
+let leq (l : t) (r : t) : bool = (compare l r) = 1
