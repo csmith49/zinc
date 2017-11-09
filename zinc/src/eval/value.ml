@@ -33,4 +33,4 @@ let compare (l : t) (r : t) : int = match l, r with
   | Real l, Real r -> Pervasives.compare l r
   | _ -> Pervasives.compare l r
 
-let leq (l : t) (r : t) : bool = (compare l r) = 1
+let geq (l : t) (r : t) : bool = (compare l r) = 1
