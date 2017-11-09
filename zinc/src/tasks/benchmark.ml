@@ -3,6 +3,7 @@
 type mechanism =
   | Laplace
   | Exponential of Dtype.t * (Value.t list)
+  | Partition of Dtype.t * (Value.t list)
 
 (* benchmarks maintain a list of all the info we need to test synthesis *)
 type t = {
@@ -20,6 +21,8 @@ open Name.Alt
 let goal_type : t -> Dtype.t = fun bm -> match bm.mechanism with
   | Laplace -> modal (k, mset (row, infinity)) -* real
   | Exponential (a, _) -> modal (k, mset (row, infinity)) -* (a => real)
+  | Partition (a, _) -> 
+    mset (a, infinity) => (modal (k, mset (row, infinity)) -* mset (pair (a, real), infinity))
 
 (* eventually, we have to convert it into a node *)
 let to_node : t -> Node.t = fun bm -> {
@@ -58,7 +61,12 @@ let verify_exponential (tm : Fterm.t) (io : (Value.t * Value.t) list) (pop : Val
       pop
   in CCList.for_all check_pair io
 
+let verify_partition (tm : Fterm.t) (io : (Value.t * Value.t) list) (keys : Value.t list): bool =
+  let check_pair = fun (i, o) -> o = (apply_binary tm (Value.Bag keys) i)
+  in CCList.for_all check_pair io
+
 (* putting it together is straightforward now *)
 let verify (tm : Fterm.t) (bm : t) : bool = match bm.mechanism with
   | Laplace -> verify_laplace tm bm.examples
   | Exponential (_, pop) -> verify_exponential tm bm.examples pop
+  | Partition (_, keys) -> verify_partition tm bm.examples keys

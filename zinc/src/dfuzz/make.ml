@@ -7,6 +7,7 @@ let n : Sensitivity.t = Sensitivity.Free (Name.of_string "n")
 
 let a : Dtype.t = Dtype.Free (Name.of_string "a")
 let b : Dtype.t = Dtype.Free (Name.of_string "b")
+let c : Dtype.t = Dtype.Free (Name.of_string "c")
 
 (* some common constants *)
 let infinity : Sensitivity.t = Sensitivity.Const (Rational.Infinity)
