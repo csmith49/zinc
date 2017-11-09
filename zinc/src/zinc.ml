@@ -12,6 +12,7 @@ let strategy = ref "fancy"
 
 (* functions defining the level of printing *)
 let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
+let more_print : string -> unit = fun s -> if !verbosity >= 2 then print_string s else ()
 let bm_print : string -> unit = fun s -> if !verbosity >= 3 then print_string s else ()
 
 let string_of_fterm : Fterm.t -> string = fun tm -> 
@@ -87,8 +88,10 @@ let synthesize (bm : Benchmark.t) : unit =
     let start_time = Sys.time () in
 
     (* PRINTING *)
-    let _ = normal_print ("Checking: " ^ (string_of_fterm tm) ^ "\n    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
-    
+    let _ = normal_print ("Checking: " ^ (string_of_fterm tm) ^ "\n") in
+    let _ = more_print ("    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
+    let _ = if !pause then (let _ = read_line () in ()) else () in
+
     (* check if the obligation is satisfiable *)
     let meets_obligation = if !dont_prune then true else check node.Node.obligation in
     
@@ -101,11 +104,14 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = if meets_obligation then
 
       (* PRINTING *)
-      let _ = normal_print ("    Satisfiable!\n") in
+      let _ = more_print ("    Satisfiable!\n") in
 
       (* check if tm is a solution *)
       if (Fterm.wild_closed tm) then
-        let meets_examples = Benchmark.verify tm bm in
+        let meets_examples = 
+          try Benchmark.verify tm bm 
+          with _ -> false
+          in
         if meets_examples then 
           let _ = total_time := ((Sys.time ()) -. start_time) +. !total_time in raise (SynthSuccess tm) 
         else ()
@@ -116,19 +122,19 @@ let synthesize (bm : Benchmark.t) : unit =
         let subproblem = Subproblem.of_node (root <+ "w") node in
         let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) in
       
-        let _ = normal_print ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal) ^ "\n") in
+        let _ = more_print ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal) ^ "\n") in
 
         let f = fun p -> Subproblem.specialize root p subproblem.Subproblem.context in
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
           let ans = Subproblem.insert_proposal p subproblem in
-          let _ = normal_print ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
+          let _ = more_print ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         
         CCList.iter (fun n -> 
           frontier := Frontier.push (Node.to_priority n) n !frontier) steps
     else
-      normal_print ("    Unsatisfiable.\n")
+      more_print ("    Unsatisfiable.\n")
     in let _ = if !pause then (let _ = read_line () in ()) else () in
 
     (* update total printer *)
