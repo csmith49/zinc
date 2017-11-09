@@ -282,6 +282,13 @@ module Adult = struct
       | Value.Discrete s -> Value.Bool (s = "female")
       | _ -> failwith "not a gender");
   }
+  let is_male = {
+    Primitive.name = "is_male";
+    dtype = gender_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "male")
+      | _ -> failwith "not a gender");
+  }
   let is_army = {
     Primitive.name = "is_army";
     dtype = profession_t => bool;
@@ -296,9 +303,23 @@ module Adult = struct
       | Value.Discrete s -> Value.Bool (s = "trade")
       | _ -> failwith "not a profession")
   }
+  let is_local = {
+    Primitive.name = "is_local";
+    dtype = work_class_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "local")
+      | _ -> failwith "not a work class");
+  }
+  let is_federal = {
+    Primitive.name = "is_federal";
+    dtype = work_class_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Discrete s -> Value.Bool (s = "federal")
+      | _ -> failwith "not a work class");
+  }
 
   (* the total signature *)
-  let signature = gt_40_hrs :: is_female ::is_army :: is_trade :: education_to_value :: keys
+  let signature = [gt_40_hrs; is_federal; is_local; is_female; is_male; is_army; is_trade] @ keys
   
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
@@ -329,6 +350,16 @@ module Arithmetic = struct
         | _ -> failwith "not a number")
       | _ -> failwith "not a number");
   }
+  let succ = {
+    Primitive.name = "succ";
+    dtype = sbind (s, 
+      modal (one, p_real s) -* real
+    );
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Real (r +. 1.0)
+      | _ -> failwith "not a number");
+  }
+
   let bad_mult = {
     Primitive.name = "bad_mult";
     dtype = sbind (s, sbind (n,
@@ -341,5 +372,5 @@ module Arithmetic = struct
     | _ -> failwith "not a number");
   }
 
-  let signature = [add; mult]
+  let signature = [add; mult; succ]
 end

@@ -80,5 +80,37 @@ let adult_03 = {
   grammar = adult_sig;
 }
 
+(* most common gender working at the local level *)
+let adult_04 = {
+  name = "adult_04";
+  mechanism = Exponential (Signature.Adult.gender_t, [Value.Discrete "male"; Value.Discrete "female"]);
+  budget = 1;
+  examples = [
+    (Value.Bag 
+      [Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ]; Signature.Adult.make [
+        Value.Bool false; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ];], Value.Discrete "female");
+  (Value.Bag 
+    [Signature.Adult.make [
+      Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+    ]; Signature.Adult.make [
+      Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+    ]; Signature.Adult.make [
+      Value.Bool false; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+    ];], Value.Discrete "female");
+  ];
+  grammar = adult_sig @ Signature.Arithmetic.signature;
+}
+
 (* an easily accessible list *)
-let all = [adult_01; adult_02; adult_03]
+let all = [adult_01; adult_02; adult_03; adult_04]
