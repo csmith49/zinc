@@ -40,6 +40,9 @@ let to_node : t -> Node.t = fun bm -> {
 (* starting verification stuff *)
 (* apply an fterm to a value to get a new value - only really works if tm is a function *)
 let apply (tm : Fterm.t) (i : Value.t) : Value.t = Fterm.eval (Fterm.App (tm, Fterm.Const i))
+let apply_binary (tm : Fterm.t) (one : Value.t) (two : Value.t) =
+  let curried = Fterm.App (tm, Fterm.Const one) in
+    Fterm.eval (Fterm.App (curried, Fterm.Const two))
 
 (* just makes sure the inputs and outputs match up *)
 let verify_laplace (tm : Fterm.t) (io : (Value.t * Value.t) list) : bool =
@@ -49,9 +52,9 @@ let verify_laplace (tm : Fterm.t) (io : (Value.t * Value.t) list) : bool =
 (* the io examples are different in this case - they're the values in a that should score highest *)
 let verify_exponential (tm : Fterm.t) (io : (Value.t * Value.t) list) (pop : Value.t list) : bool =
   let check_pair = fun (i, o) ->
-    let score = apply tm i in
+    let score = apply_binary tm i o in
       CCList.for_all (fun p -> 
-        p = o || (Value.leq (apply tm p) score))
+        p = o || (Value.leq (apply_binary tm i p) score))
       pop
   in CCList.for_all check_pair io
 
