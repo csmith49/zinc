@@ -222,17 +222,55 @@ end
 module Database = struct
   let compare_with = {
     Primitive.name = "compare_with";
-    Primitive.dtype = tbind (a, sbind (s,
+    dtype = tbind (a, sbind (s,
       modal (s, row => a) -* (a => (modal (one, mset (row, s)) -* mset (row, infinity)))
     ));
-    Primitive.source = Value.F (fun v -> match v with
+    source = Value.F (fun v -> match v with
       | Value.F project -> Value.F (fun c -> Value.F (
         fun v -> match v with
           | Value.Bag ts -> Value.Bag (CCList.filter (fun row -> (project row) = c) ts)
           | _ -> failwith "not a bag"))
       | _ -> failwith "not a function");
   }
-  let signature = [compare_with]
+
+  let partition = {
+    Primitive.name = "partition";
+    dtype = tbind (a, tbind (b, sbind (s, sbind (n, 
+      modal (one, mset (a, n)) -* (
+        modal (s, (b => a)) -* (
+          modal (one, mset (b, s)) -* (
+            mset (pair (a, mset (b, infinity)), n)
+          )
+        ) 
+      )
+    ))));
+    source = Value.F (fun v -> match v with
+      | Value.Bag keys -> Value.F (fun v -> match v with
+        | Value.F project -> Value.F (fun v -> match v with
+          | Value.Bag xs -> Value.Bag (
+            CCList.map (fun k ->
+              Value.Pair (k, Value.Bag (CCList.filter (fun v -> (project v) = k) xs))
+            ) keys)
+          | _ -> failwith "not a bag")
+        | _ -> failwith "not a projection")
+      | _ -> failwith "not a set of keys");
+  }
+
+  let group_map = {
+    Primitive.name = "group_map";
+    dtype = tbind (a, tbind (b, tbind (c, sbind (s, sbind (n, 
+      modal (one, mset (pair (a, b), n)) -* (modal (n, b => c) -* mset (pair (a, c), n))
+    )))));
+    source = Value.F (fun v -> match v with
+      | Value.Bag xs -> Value.F (fun v -> match v with
+        | Value.F f -> Value.Bag (CCList.map (fun v -> match v with
+          | Value.Pair (k, v) -> Value.Pair (k, f v)
+          | _ -> failwith "not a pair") xs)
+        | _ -> failwith "not a function")
+      | _ -> failwith "not a bag");
+  }
+
+  let signature = [compare_with; partition; group_map]
 end
 
 (* signature for ADULT benchmarks *)
@@ -265,7 +303,7 @@ module Adult = struct
   }
   let education_to_value = {
     Primitive.name = "edu_to_value";
-    dtype = modal (Sensitivity.Const (Rational.of_int 20), education_t) -* bounded;
+    dtype = modal (Sensitivity.Const (Rational.of_int 20), education_t) -* real;
     source = Value.F (fun v -> v);
   }
 

@@ -115,5 +115,35 @@ let adult_04 = {
   grammar = adult_sig  @ Signature.Database.signature;
 }
 
+(* population per race *)
+let adult_05 = {
+  name = "adult_05";
+  mechanism = Partition (Signature.Adult.race_t, [Value.Discrete "white"; Value.Discrete "black"]);
+  budget = 20;
+  examples = [
+    (* example 1 *)
+    (* inputs *)
+    (Value.Bag [
+      Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 20.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ];
+      Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+        Value.Real 20.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ];
+      Signature.Adult.make [
+        Value.Bool true; Value.Discrete "female"; Value.Discrete "white"; Value.Real 20.0; 
+        Value.Real 20.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+      ];
+    ], 
+    (* outputs *)
+    Value.Bag [
+      Value.Pair (Value.Discrete "white", Value.Real 1.0); 
+      Value.Pair (Value.Discrete "black", Value.Real 2.0)])
+  ];
+  grammar = adult_sig @ Signature.Database.signature;
+}
+
 (* an easily accessible list *)
-let all = [adult_01; adult_02; adult_03; adult_04]
+let all = [adult_01; adult_02; adult_03; adult_04; adult_05]
