@@ -3,5 +3,6 @@
 "src/dfuzz": include
 "src/eval": include
 "src/tasks": include
+"src/tasks/datasets": include
 "src/search": include
 true: annot, bin_annot

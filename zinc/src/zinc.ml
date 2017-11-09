@@ -41,7 +41,7 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
   | _ -> failwith ("can't find provided benchmark: " ^ name)
 
 (* pull the benchmark from the arguments *)
-let benchmark = extract_benchmark !benchmark_name Benchmark.all
+let benchmark = extract_benchmark !benchmark_name Dataset.all
 
 (* construct the strategy *)
 module BasicStrategy = Solver.Strategy(Solver.Basic)
