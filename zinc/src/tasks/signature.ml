@@ -220,17 +220,19 @@ module Constants = struct
 end
 
 module Database = struct
-  let compare = {
-    Primitive.name = "compare";
-    Primitive.dtype = tbind (a, row => ((row => a) => (a => bool)));
+  let compare_with = {
+    Primitive.name = "compare_with";
+    Primitive.dtype = tbind (a, sbind (s,
+      modal (s, row => a) -* (a => (modal (one, mset (row, s)) -* mset (row, infinity)))
+    ));
     Primitive.source = Value.F (fun v -> match v with
-      | Value.Row r -> Value.F (fun v -> match v with
-        | Value.F p -> Value.F (fun v -> Value.Bool (p (Value.Row r) == v))
-        | _ -> failwith "not a function")
-      | _ -> failwith "not a row");
+      | Value.F project -> Value.F (fun c -> Value.F (
+        fun v -> match v with
+          | Value.Bag ts -> Value.Bag (CCList.filter (fun row -> (project row) = c) ts)
+          | _ -> failwith "not a bag"))
+      | _ -> failwith "not a function");
   }
-
-  let signature = [compare]
+  let signature = [compare_with]
 end
 
 (* signature for ADULT benchmarks *)

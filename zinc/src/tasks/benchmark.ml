@@ -54,7 +54,7 @@ let verify_exponential (tm : Fterm.t) (io : (Value.t * Value.t) list) (pop : Val
   let check_pair = fun (i, o) ->
     let score = apply_binary tm i o in
       CCList.for_all (fun p -> 
-        p = o || (Value.leq (apply_binary tm i p) score))
+        p = o || (Value.geq score (apply_binary tm i p)))
       pop
   in CCList.for_all check_pair io
 

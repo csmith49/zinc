@@ -99,17 +99,20 @@ let adult_04 = {
       ];], Value.Discrete "female");
   (Value.Bag 
     [Signature.Adult.make [
-      Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
-      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
-    ]; Signature.Adult.make [
-      Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
-      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
-    ]; Signature.Adult.make [
-      Value.Bool false; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
       Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
-    ];], Value.Discrete "female");
+    ]; Signature.Adult.make [
+      Value.Bool true; Value.Discrete "female"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "federal"; Value.Real 0.0 
+    ]; Signature.Adult.make [
+      Value.Bool true; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+    ]; Signature.Adult.make [
+      Value.Bool false; Value.Discrete "male"; Value.Discrete "black"; Value.Real 20.0; 
+      Value.Real 12.0; Value.Discrete "trade"; Value.Discrete "local"; Value.Real 0.0 
+    ];], Value.Discrete "male");
   ];
-  grammar = adult_sig @ Signature.Arithmetic.signature;
+  grammar = adult_sig  @ Signature.Database.signature;
 }
 
 (* an easily accessible list *)
