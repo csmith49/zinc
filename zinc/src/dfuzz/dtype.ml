@@ -63,7 +63,7 @@ let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
 and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt with
   | Precise p -> begin match p with
       | N s -> Precise (N (Sensitivity.instantiate' img db s))
-      | M (s, dt') -> Precise (M (Sensitivity.instantiate' img db s, dt'))
+      | M (s, dt') -> Precise (M (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
       | R s -> Precise (R (Sensitivity.instantiate' img db s))
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate_sens' img (db + 1) body))
@@ -164,6 +164,9 @@ let rec free_vars : t -> Name.t list = function
   | Quant (_, _, Sc body) -> free_vars body
   | Func (Modal (s, d), c) -> (free_vars d) @ (free_vars c) @ (Sensitivity.free_vars s)
   | Tensor (l, r) -> (free_vars l) @ (free_vars r)
+  | Bounded b -> begin match b with
+      | BR s -> Sensitivity.free_vars s
+    end
   | _ -> []
 
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)

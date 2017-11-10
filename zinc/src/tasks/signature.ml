@@ -284,10 +284,10 @@ module Adult = struct
   let keys = [gt_50k; race; gender; work_hours; education_level; profession; work_class; capital_gains]
 
   (* with simple conversions *)
-  let hours_to_val = conversion "hours_to_val" hours_t 1 (bounded_by 168)
-  let education_to_val = conversion "edu_to_val" education_t 1 (bounded_by 20)
+  let hours_to_val = bounded_conversion "hours_to_val" hours_t 168
+  let education_to_val = bounded_conversion "edu_to_val" education_t 20
 
-  let conversions =[hours_to_val; education_to_val]
+  let conversions = [hours_to_val; education_to_val]
 
   (* and some simple predicates for the search *)
   let gt_40_hrs = {
