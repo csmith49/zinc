@@ -7,6 +7,7 @@ type t =
   | Func of modal * t
   | Tensor of t * t
   | Base of base
+  | Bounded of bounded
 and precise =
   | N of Sensitivity.t
   | M of Sensitivity.t * t
@@ -20,14 +21,8 @@ and kind =
 and scope = Sc of t
 and modal = Modal of Sensitivity.t * t
 and base = string
-  (* | Real
-  | Integer
-  | Bool
-  | String
-  | Database
-  | Bounded
-  | Row
-  | Discrete *)
+and bounded =
+  | BR of Sensitivity.t
 
 (* mcbride and mckinna *)
 let rec abstract (n : Name.t) (dt : t) : scope = Sc (abstract' n 0 dt)
@@ -43,6 +38,9 @@ and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
       | Modal (s, dom) -> Func (Modal (Sensitivity.abstract' n db s, abstract' n db dom), abstract' n db codom)
     end
   | Tensor (l, r) -> Tensor (abstract' n db l, abstract' n db r)
+  | Bounded b -> begin match b with
+      | BR s -> Bounded (BR (Sensitivity.abstract' n db s))
+    end
   | _ -> dt (* catches Base and Bound case *)
 
 let rec instantiate (img : t) (s : scope) : t = match s with
@@ -76,8 +74,10 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt w
         Func (Modal (Sensitivity.instantiate' img db s, dom'), codom')
     end
   | Tensor (l, r) -> Tensor (instantiate_sens' img db l, instantiate_sens' img db r)
+  | Bounded b -> begin match b with
+      | BR s -> Bounded (BR (Sensitivity.instantiate' img db s))
+    end
   | _ -> dt
-
 
 (* submodules will want to refer to this type *)
 type dtype = t
@@ -145,16 +145,10 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
     let r', s'' = to_string' r s' in
     ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
   | Base b -> (b, s) 
-    (* begin match b with
-      | Real -> ("ℝ", s)
-      | Integer -> ("N", s)
-      | Bool -> ("2", s)
-      | String -> ("Str", s)
-      | Database -> ("DB", s)
-      | Bounded -> ("B", s)
-      | Row -> ("Row", s)
-      | Discrete -> ("D", s)
-    end *)
+  | Bounded b -> begin match b with
+      | BR b -> ("BR[" ^ (Sensitivity.to_string b) ^ "]", s)
+    end
+
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "∃"
   | ForAll -> "∀"

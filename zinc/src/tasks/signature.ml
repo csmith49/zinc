@@ -88,12 +88,12 @@ module MapReduce = struct
       | _ -> failwith "can't apply a non-function mapper");
   }
 
-  let reduce = {
+  (* let reduce = {
     Primitive.name = "reduce";
     Primitive.dtype = 
-      sbind (s, sbind (n,
-        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded, n)) -* real)
-      ));
+      sbind (s, sbind (n, sbind (k,
+        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded k, n)) -* real)
+      )));
     Primitive.source = Value.F (fun v -> match v with
       | Value.F f -> Value.F (fun v -> match v with
         | Value.Bag ts -> begin match ts with
@@ -103,9 +103,9 @@ module MapReduce = struct
         | _ -> failwith "can't apply reduce to a non-bag")
       | _ -> failwith "can't apply a non-function reducer"
     );
-  }
+  } *)
 
-  let signature = [filter; map; reduce]
+  let signature = [filter; map]
 end
 
 (* most aggregations have to operate over bounded types *)
@@ -120,7 +120,7 @@ module Aggregate = struct
 
   let sum = {
     Primitive.name = "sum";
-    dtype = sbind (n, modal (one, mset (bounded, n)) -* real);
+    dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
     source = Value.F (fun v -> match v with
       | Value.Bag ts -> Value.Real (CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts))
       | _ -> failwith "can't sum a non-bag");
@@ -128,7 +128,7 @@ module Aggregate = struct
 
   let average = {
     Primitive.name = "average";
-    dtype = sbind (n, modal (one, mset (bounded, n)) -* real);
+    dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
     source = Value.F (fun v -> match v with
       | Value.Bag ts ->
         let total = CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts) in
@@ -284,16 +284,10 @@ module Adult = struct
   let keys = [gt_50k; race; gender; work_hours; education_level; profession; work_class; capital_gains]
 
   (* with simple conversions *)
-  let hours_to_value = {
-    Primitive.name = "hours_to_value";
-    dtype = modal (Sensitivity.Const (Rational.of_int 168), hours_t) -* real;
-    source = Value.F (fun v -> v);
-  }
-  let education_to_value = {
-    Primitive.name = "edu_to_value";
-    dtype = modal (Sensitivity.Const (Rational.of_int 20), education_t) -* real;
-    source = Value.F (fun v -> v);
-  }
+  let hours_to_val = conversion "hours_to_val" hours_t 1 (bounded_by 168)
+  let education_to_val = conversion "edu_to_val" education_t 1 (bounded_by 20)
+
+  let conversions =[hours_to_val; education_to_val]
 
   (* and some simple predicates for the search *)
   let gt_40_hrs = {
@@ -311,8 +305,10 @@ module Adult = struct
   let is_local = discrete_check "is_local" "local" work_class_t
   let is_federal = discrete_check "is_federal" "federal" work_class_t
 
+  let checks = [gt_40_hrs; is_female; is_male; is_army; is_trade; is_local; is_federal]
+
   (* the total signature *)
-  let signature = [gt_40_hrs; is_federal; is_local; is_female; is_male; is_army; is_trade] @ keys
+  let signature = checks @ keys @ conversions
   
   (* and a utility for constructing examples *)
   let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]

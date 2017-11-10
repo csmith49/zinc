@@ -19,7 +19,6 @@ let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 let real : Dtype.t = Dtype.Precise (Dtype.R (Sensitivity.Const (Rational.Infinity)))
 let bool : Dtype.t = Dtype.Base "bool"
 let int : Dtype.t = Dtype.Base "int"
-let bounded : Dtype.t = Dtype.Base "bounded"
 let row : Dtype.t = Dtype.Base "row"
 
 let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
@@ -28,6 +27,10 @@ let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.R s)
 let p_int (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.N s)
 let mset (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.M (snd p, fst p))
+
+(* and bounded type constructors *)
+let bounded (s : Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.BR s)
+let bounded_by (s : int) : Dtype.t = Dtype.Bounded (Dtype.BR (Sensitivity.Const (Rational.of_int s)))
 
 (* the modal constructor *)
 let modal (p : Sensitivity.t * Dtype.t) : Dtype.modal = Dtype.Modal (fst p, snd p)

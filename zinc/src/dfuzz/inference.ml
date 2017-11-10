@@ -30,6 +30,9 @@ let rec subtype (root : Name.t) (bigger : Dtype.t) (smaller : Dtype.t) : Constra
           let dt = Dtype.Free a in
           subtype a (instantiate dt body) (instantiate dt body')
       end
+    | Bounded l, Bounded r -> begin match l, r with
+        | BR s, BR s' -> s == s'
+      end
     | _ -> unsat
 and subtype_modal (root : Name.t) (bigger : Dtype.modal) (smaller : Dtype.modal) : Constraint.t =
   (* reflexivity *)
@@ -111,6 +114,9 @@ let rec unify (root : Name.t) (vars : Name.t list) (left : Dtype.t) (right : Dty
         | _ -> Sub.failure
       end
     | Base b, Base b' when b = b' -> Sub.empty
+    | Bounded b, Bounded b' -> begin match b, b' with
+        | BR s, BR s' when s = s' -> Sub.empty
+      end
     | _ -> Sub.failure
 
 (* unification - assumes all sensitivities are equivalent, so build constraints appropriately *)
@@ -152,4 +158,7 @@ let rec subtype_unify (root : Name.t) (left : Dtype.t) (right : Dtype.t) : Const
       | R s, R s' -> (s == s', Sub.empty)
       | _ -> (unsat, Sub.failure)
     end
+    | Bounded b, Bounded b' -> begin match b, b' with
+        | BR s, BR s' -> (s == s', Sub.empty)
+      end
     | _ -> (unsat, Sub.failure)
