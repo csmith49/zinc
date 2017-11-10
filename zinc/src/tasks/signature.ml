@@ -414,8 +414,12 @@ module Student = struct
       | Value.Real r -> Value.Bool (r < 3.0)
       | _ -> failwith "not a real value")
   }
+  
+  let is_rural = discrete_check "is_rural" "rural" address_type_t
+  let is_urban = discrete_check "is_urban" "urban" address_type_t
 
-  let checks = [moderate; poor]
+
+  let checks = [moderate; poor; is_rural; is_urban]
 
   (* put it all together *)
   let signature = keys @ conversions @ checks

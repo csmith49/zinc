@@ -116,6 +116,7 @@ let rec unify (root : Name.t) (vars : Name.t list) (left : Dtype.t) (right : Dty
     | Base b, Base b' when b = b' -> Sub.empty
     | Bounded b, Bounded b' -> begin match b, b' with
         | BR s, BR s' when s = s' -> Sub.empty
+        | _ -> Sub.failure
       end
     | _ -> Sub.failure
 

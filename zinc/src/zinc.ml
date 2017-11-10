@@ -130,9 +130,10 @@ let synthesize (bm : Benchmark.t) : unit =
           let ans = Subproblem.insert_proposal p subproblem in
           let _ = more_print ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
-        
-        CCList.iter (fun n -> 
-          frontier := Frontier.push (Node.to_priority n) n !frontier) steps
+        let _ = bm_print ("\tInserting expansions into frontier...") in
+        let _ = CCList.iter (fun n -> 
+          frontier := Frontier.push (Node.to_priority n) n !frontier) steps in
+        bm_print ("done.\n")
     else
       more_print ("    Unsatisfiable.\n")
     in let _ = if !pause then (let _ = read_line () in ()) else () in

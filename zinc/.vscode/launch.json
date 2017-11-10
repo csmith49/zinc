@@ -15,7 +15,7 @@
             "type": "ocamldebug",
             "request": "launch",
             "program": "${workspaceRoot}/zinc",
-            "arguments": ["-bm=basic_01"],
+            "arguments": ["-bm=student_01", "-disable"],
             "console": "internalConsole",
             "stopOnEntry": false,
             "preLaunchTask": "byte"
