@@ -391,28 +391,46 @@ module Student = struct
   let keys = [grade; reason; weekend_consumption; weekday_consumption; address_type; payed; family; absences]
 
   (* conversions, where appropriate *)
-  let grade_to_val = conversion "grade_to_val" grade_t 20 real
-  let weekend_to_val = conversion "weekend_to_val" weekend_consumption_t 5 real
-  let weekday_to_val = conversion "weekday_to_val" weekday_consumption_t 5 real
-  let family_to_val = conversion "family_to_val" family_t 5 real
-  let absences_to_val = conversion "absences_to_val" absences_t 100 real
+  let grade_to_val = bounded_conversion "grade_to_val" grade_t 20
+  let wknd_to_val = bounded_conversion "wknd_to_val" weekend_consumption_t 5
+  let wkdy_to_val = bounded_conversion "wkdy_to_val" weekday_consumption_t 5
+  let fam_to_val = bounded_conversion "fam_to_val" family_t 5
+  let abs_to_val = bounded_conversion "abs_to_val" absences_t 100
 
-  let conversions = [grade_to_val; weekend_to_val; weekday_to_val; family_to_val; absences_to_val]
+  let conversions = [grade_to_val; wknd_to_val; wkdy_to_val; fam_to_val; abs_to_val]
 
   (* and some utility functions *)
   let moderate = {
     Primitive.name = "moderate";
-    dtype = real => bool;
+    dtype = (bounded_by 5) => bool;
     source = Value.F (fun v -> match v with
       | Value.Real r -> Value.Bool (r >= 3.0)
       | _ -> failwith "not a real value")
   }
   let poor = {
     Primitive.name = "poor";
-    dtype = real => bool;
+    dtype = (bounded_by 5) => bool;
     source = Value.F (fun v -> match v with
       | Value.Real r -> Value.Bool (r < 3.0)
       | _ -> failwith "not a real value")
   }
 
+  let checks = [moderate; poor]
+
+  (* put it all together *)
+  let signature = keys @ conversions @ checks
+
+  (* and help make some rows *)
+  (* schema = [grade; reason; wknd; wkdy; address; payed; family; absences] *)
+  let make (grade : int) (reason : string) (wknd : int) (wkdy : int) (address : string) (payed : bool) (family : int) (absences : int) : Value.t =
+    Value.row_of_list [
+      ("grade", Value.Real (float_of_int grade)); 
+      ("reason", Value.Discrete reason);
+      ("weekend_consumption", Value.Real (float_of_int wknd));
+      ("weekday_consumption", Value.Real (float_of_int wkdy));
+      ("address_type", Value.Discrete (address));
+      ("payed", Value.Bool (payed));
+      ("family", Value.Real (float_of_int family));
+      ("absences", Value.Real (float_of_int absences))
+    ]
 end

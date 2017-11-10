@@ -32,6 +32,12 @@ module Utility = struct
     source = Value.F (fun v -> v);
   }
 
+  let bounded_conversion (n : string) (dom: Dtype.t) (sens : int) : t = {
+    name = n;
+    dtype = modal (one, dom) -* (bounded_by sens);
+    source = Value.F (fun v -> v);
+  }
+
   let discrete_check (n : string) (goal : string) (goal_type : Dtype.t) : t = {
     name = n;
     dtype = goal_type => bool;
