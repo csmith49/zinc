@@ -11,21 +11,6 @@ let unpack_real (r : Value.t) : float = match r with
   | Value.Int i -> float_of_int i
   | _ -> failwith "not a real number"
 
-(* we'll do a lot of projection over rows *)
-let projection (n : string) (dt : Dtype.t) : Primitive.t = {
-  Primitive.name = n;
-  dtype = row => dt;
-  source = Value.F (fun v -> match v with
-    | Value.Row r -> Value.StringMap.find n r
-    | _ -> failwith "not a row")
-}
-
-let discrete_constant (n : string) (dt : Dtype.t) : Primitive.t = {
-  Primitive.name = n;
-  dtype = dt;
-  source = Value.Discrete n;
-}
-
 (* each module will maintain several lists of primitives *)
 type t = Primitive.t list
 
@@ -123,6 +108,7 @@ module MapReduce = struct
   let signature = [filter; map; reduce]
 end
 
+(* most aggregations have to operate over bounded types *)
 module Aggregate = struct
   let count = {
     Primitive.name = "count";
@@ -275,6 +261,8 @@ end
 
 (* signature for ADULT benchmarks *)
 module Adult = struct
+  open Primitive.Utility
+
   (* the dtype encodings *)
   let gender_t = constant_type "Gender"
   let race_t = constant_type "Race"
@@ -315,48 +303,13 @@ module Adult = struct
       | Value.Real r -> Value.Bool (r >= 40.0)
       | _ -> failwith "not an hour");
   }
-  let is_female = {
-    Primitive.name = "is_female";
-    dtype = gender_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "female")
-      | _ -> failwith "not a gender");
-  }
-  let is_male = {
-    Primitive.name = "is_male";
-    dtype = gender_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "male")
-      | _ -> failwith "not a gender");
-  }
-  let is_army = {
-    Primitive.name = "is_army";
-    dtype = profession_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "army")
-      | _ -> failwith "not a profession");
-  }
-  let is_trade = {
-    Primitive.name = "is_trade";
-    dtype = profession_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "trade")
-      | _ -> failwith "not a profession")
-  }
-  let is_local = {
-    Primitive.name = "is_local";
-    dtype = work_class_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "local")
-      | _ -> failwith "not a work class");
-  }
-  let is_federal = {
-    Primitive.name = "is_federal";
-    dtype = work_class_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Discrete s -> Value.Bool (s = "federal")
-      | _ -> failwith "not a work class");
-  }
+
+  let is_female = discrete_check "is_female" "female" gender_t
+  let is_male = discrete_check "is_male" "male" gender_t
+  let is_army = discrete_check "is_army" "army" profession_t
+  let is_trade = discrete_check "is_trade" "trade" profession_t
+  let is_local = discrete_check "is_local" "local" work_class_t
+  let is_federal = discrete_check "is_federal" "federal" work_class_t
 
   (* the total signature *)
   let signature = [gt_40_hrs; is_federal; is_local; is_female; is_male; is_army; is_trade] @ keys
@@ -413,4 +366,57 @@ module Arithmetic = struct
   }
 
   let signature = [add; mult; succ]
+end
+
+(* student alcohol consumption study *)
+module Student = struct
+  open Primitive.Utility
+
+  (* types encoding our fields *)
+  let grade_t = constant_type "Grade"
+  let reason_t = constant_type "Reason"
+  let weekend_consumption_t = constant_type "Weekend Alcohol"
+  let weekday_consumption_t = constant_type "Weekday Alcohol"
+  let address_type_t = constant_type "Address Type"
+  let payed_t = constant_type "Payed Classes"
+  let family_t = constant_type "Family"
+  let absences_t = constant_type "Absences"
+
+  (* projections *)
+  let grade = projection "grade" grade_t
+  let reason = projection "reason" reason_t
+  let weekend_consumption = projection "weekend_consumption" weekend_consumption_t
+  let weekday_consumption = projection "weekday_consumption" weekday_consumption_t
+  let address_type = projection "address_type" address_type_t
+  let payed = projection "payed" payed_t
+  let family = projection "family" family_t
+  let absences = projection "absences" absences_t
+
+  let keys = [grade; reason; weekend_consumption; weekday_consumption; address_type; payed; family; absences]
+
+  (* conversions, where appropriate *)
+  let grade_to_val = conversion "grade_to_val" grade_t 20 real
+  let weekend_to_val = conversion "weekend_to_val" weekend_consumption_t 5 real
+  let weekday_to_val = conversion "weekday_to_val" weekday_consumption_t 5 real
+  let family_to_val = conversion "family_to_val" family_t 5 real
+  let absences_to_val = conversion "absences_to_val" absences_t 100 real
+
+  let conversions = [grade_to_val; weekend_to_val; weekday_to_val; family_to_val; absences_to_val]
+
+  (* and some utility functions *)
+  let moderate = {
+    Primitive.name = "moderate";
+    dtype = real => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r >= 3.0)
+      | _ -> failwith "not a real value")
+  }
+  let poor = {
+    Primitive.name = "poor";
+    dtype = real => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r < 3.0)
+      | _ -> failwith "not a real value")
+  }
+
 end
