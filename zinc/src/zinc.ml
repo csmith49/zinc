@@ -49,7 +49,7 @@ module BasicStrategy = Solver.Strategy(Solver.Basic)
 module FancyStrategy = Solver.Strategy(Solver.Fancy)
 
 
-let check : Constraint.t -> bool = match !strategy with
+let check : Constraint.t -> (bool * Solver.expr list) = match !strategy with
   | "basic" -> BasicStrategy.check
   | "fancy" -> FancyStrategy.check
   | _ -> FancyStrategy.check
@@ -93,7 +93,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = if !pause then (let _ = read_line () in ()) else () in
 
     (* check if the obligation is satisfiable *)
-    let meets_obligation = if !dont_prune then true else check node.Node.obligation in
+    let meets_obligation = if !dont_prune then true else fst (check node.Node.obligation) in
     
     (* update the timer *)
     let sat_check_time = (Sys.time()) -. start_time in 

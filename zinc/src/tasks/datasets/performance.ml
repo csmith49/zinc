@@ -104,6 +104,7 @@ let performance_04 = {
 }
 
 (* average grade in the low performance bracket *)
+(* λx.average (filter (λy.is_low (to_bracket (y))) (map (λz.level_to_val (level (z))) (x))) *)
 let performance_05 = {
   name = "performance_05";
   mechanism = Laplace;

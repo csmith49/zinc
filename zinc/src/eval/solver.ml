@@ -72,14 +72,15 @@ module Strategy = functor (S : STRATEGY) -> struct
       (p, propositional)
 
   (* the reason we want this - given a strat, wrap it in a call to z3 *)
-  let check : Constraint.t -> bool = fun c ->
+  let check : Constraint.t -> (bool * expr list) = fun c ->
     let exprs = S.to_expr_list (S.of_constraint c) in
     let (p, propositional) = propositional_representation exprs in
     let _ = Z3.Solver.reset solver in
-    let _ = Z3.Solver.add solver [propositional] in
+    let _ = Z3.Solver.assert_and_track_l solver [propositional] in
     match Z3.Solver.check solver [p] with
-      | Z3.Solver.UNSATISFIABLE -> false
-      | _ -> true
+      | Z3.Solver.UNSATISFIABLE -> 
+        false, Z3.Solver.get_unsat_core solver
+      | _ -> true, []
 end
 
 (* here we describe strategies *)
