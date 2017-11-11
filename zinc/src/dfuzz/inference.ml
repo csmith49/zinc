@@ -57,7 +57,7 @@ module Sub = struct
     | S ls, S rs -> S (ls @ rs)
     | _ -> failure
   let rec apply (sub : t) (dt : Dtype.t) : Dtype.t = match sub with
-    | S ls -> CCList.fold_left (CCFun.flip apply_m) dt ls
+    | S ls -> CCList.fold_left (fun l -> fun r -> apply_m r l) dt ls
     | _ -> failwith "can't apply a failed substitution"
   and apply_m (map : m) (dt : Dtype.t) : Dtype.t = match map with
     | M (n, img) -> Dtype.instantiate img (Dtype.abstract n dt)

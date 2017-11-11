@@ -6,3 +6,4 @@
 "src/tasks/datasets": include
 "src/search": include
 true: annot, bin_annot
+true: profile, debug

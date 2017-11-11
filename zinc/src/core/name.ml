@@ -18,34 +18,15 @@ let add_string (n : t) (s : string) : t =
 (* we can make names simply from strings using above *)
 let of_string (s : string) : t = add_string Rlist.Empty s
 
-(* we'll use this for printing unique strings *)
-let rec hash : t -> CCHash.hash = function
-  | Rlist.Empty -> 1
-  | Rlist.Cons (i, nm) -> (CCHash.pair id_hash hash) (i, nm)
-and id_hash : id -> CCHash.hash = function
-  | Id (s, i) -> (CCHash.pair CCHash.string CCHash.int) (s, i)
-
 (* there's many ways to write these out - we go for a readable presentation *)
 let rec to_string : t -> string = fun n -> match n with
   | Rlist.Empty -> "EMPTY"
   | Rlist.Cons (i, nm) -> let i' = match i with
-    | Id (s, i) ->
-      if i < 5 then
-        s ^ (CCString.repeat "\'" i)
-      else
-        s ^ "_" ^ (string_of_int i)
-    in let uniq = match hash nm with
+    | Id (s, i) -> s ^ "_" ^ (string_of_int i)
+    in let uniq = match CCHash.poly nm with
       | 1 -> ""
-      | (_ as u) -> "{" ^ (CCString.take 3 (string_of_int u)) ^ "}"
+      | (_ as u) -> "{" ^ (string_of_int u) ^ "}"
     in i' ^ uniq
-
-(* our comparisons deal with prefixes *)
-let rec is_prefix (short : t) (long : t) : bool =
-  if short == long then
-    true
-  else match long with
-    | Rlist.Empty -> false
-    | Rlist.Cons (_, ns) -> is_prefix short ns
 
 (* a type indicating a list of names *)
 type prefix = t Rlist.t

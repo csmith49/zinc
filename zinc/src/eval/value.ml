@@ -18,7 +18,7 @@ let rec to_string : t -> string = function
   | Bool b -> string_of_bool b
   | Real r -> string_of_float r
   | F _ -> "<FUN>"
-  | Bag ts -> "[" ^ (CCString.concat ", " (CCList.map to_string ts)) ^ "]"
+  | Bag ts -> "[" ^ (String.concat ", " (CCList.map to_string ts)) ^ "]"
   | Row r -> "ROW"
   | Discrete d -> d
   | Pair (l, r) -> "(" ^ (to_string l) ^ ", " ^ (to_string r) ^ ")"
