@@ -448,3 +448,128 @@ module Student = struct
       ("absences", Value.Real (float_of_int absences))
     ]
 end
+
+(* student academic performance study *)
+module Performance = struct
+  open Primitive.Utility
+
+  (* types encoding the fields *)
+  let level_t = constant_type "Level"
+  let absences_t = constant_type "Absences"
+  let participation_t = constant_type "Participation"
+  let discussion_t = constant_type "Discussion"
+  let resources_t = constant_type "Resources"
+
+  (* and one not *)
+  let bracket_t = constant_type "Bracket"
+
+  (* projections defining keys *)
+  let level = projection "level" level_t
+  let satisfaction = projection "satisfaction" bool
+  let absences = projection "absences" absences_t
+  let participation = projection "participation" participation_t
+  let discussion = projection "discussion" discussion_t
+  let resources = projection "resources" resources_t
+
+  let keys = [level; satisfaction; absences; participation; discussion; resources]
+
+  (* conversions *)
+  let level_to_val = bounded_conversion "level_to_val" level_t 100
+  let part_to_val = bounded_conversion "part_to_val" participation_t 100
+  let disc_to_val = bounded_conversion "disc_to_val" discussion_t 100
+  let res_to_val = bounded_conversion "res_to_val" resources_t 100
+
+  let conversions = [level_to_val; part_to_val; disc_to_val; res_to_val]
+
+  (* and utility functions *)
+  let low = {
+    Primitive.name = "low";
+    dtype = (bounded_by 100) => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r <= 69.0)
+      | _ -> failwith "not a real value");
+  }
+  let medium = {
+    Primitive.name = "medium";
+    dtype = (bounded_by 100) => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r > 69.0 && r <= 89.0)
+      | _ -> failwith "not a real value");
+  }
+  let high = {
+    Primitive.name = "high";
+    dtype = (bounded_by 100) => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r > 89.0)
+      | _ -> failwith "not a real value");
+  }
+
+  let to_bracket = {
+    Primitive.name = "to_bracket";
+    dtype = (bounded_by 100) => bracket_t;
+    source = Value.F (fun v -> match v with
+      | Value.Real r ->
+        if r <= 69.0 then
+          Value.Discrete "low"
+        else if r <= 89.0 then
+          Value.Discrete "medium"
+        else
+          Value.Discrete "high"
+      | _ -> failwith "not a real value")
+  }
+
+  let is_bracket = {
+    Primitive.name = "is_bracket";
+    dtype = (bounded_by 100) => (bracket_t => bool);
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.F (fun v -> match v with
+        | Value.Discrete b ->
+          if r <= 69.0 && b = "low" then
+            Value.Bool true
+          else if r <= 89.0 && r > 69.0 && b = "medium" then
+            Value.Bool true
+          else if r > 89.0 && b = "high" then
+            Value.Bool true
+          else
+            Value.Bool false 
+        | _ -> failwith "not a bracket")
+      | _ -> failwith "not a real")
+  }
+
+  let is_low = discrete_check "is_low" "low" bracket_t
+  let is_medium = discrete_check "is_medium" "medium" bracket_t
+  let is_high = discrete_check "is_high" "high" bracket_t
+  
+  (* including those for absences *)
+  let gt_7 = {
+    Primitive.name = "gt_7";
+    dtype = absences_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r > 7.0)
+      | _ -> failwith "not a real value");
+  }
+  let leq_7 = {
+    Primitive.name = "leq_7";
+    dtype = absences_t => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r <= 7.0)
+      | _ -> failwith "not a real value");
+  }
+
+  let utilities = [to_bracket; is_bracket; is_low; is_medium; is_high; gt_7; leq_7]
+
+  (* put it together *)
+  let signature = keys @ conversions @ utilities
+
+  (* and make it easier to construct examples *)
+  (* schema: level; satisfaction; absences; participation; resources; discussion; *)
+  let make (level : int) (satisfaction : bool) (absences : int) (participation : int) (resources : int) (discussion : int) : Value.t =
+    Value.row_of_list [
+      ("level", Value.Real (float_of_int level));
+      ("satisfaction", Value.Bool satisfaction);
+      ("absences", Value.Real (float_of_int absences));
+      ("participation", Value.Real (float_of_int participation));
+      ("resources", Value.Real (float_of_int resources));
+      ("discussion", Value.Real (float_of_int discussion));
+    ]
+end
