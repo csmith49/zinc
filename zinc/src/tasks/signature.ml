@@ -130,14 +130,16 @@ module Aggregate = struct
     Primitive.name = "average";
     dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
     source = Value.F (fun v -> match v with
-      | Value.Bag ts ->
+      | Value.Bag ts -> begin match ts with
+        | [] -> Value.Real 0.0
+        | _ ->
         let total = CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts) in
         let count = float_of_int (CCList.length ts) in
-          Value.Real (total /. count)
+          Value.Real (total /. count) end
       | _ -> failwith "can't average a non-bag");
   }
 
-  let signature = [count; sum; average]
+  let signature = [sum; average; count]
 end
 
 (* combinatorics for defining predicates *)
@@ -374,7 +376,6 @@ module Student = struct
   let weekend_consumption_t = constant_type "Weekend Alcohol"
   let weekday_consumption_t = constant_type "Weekday Alcohol"
   let address_type_t = constant_type "Address Type"
-  let payed_t = constant_type "Payed Classes"
   let family_t = constant_type "Family"
   let absences_t = constant_type "Absences"
 
@@ -384,7 +385,7 @@ module Student = struct
   let weekend_consumption = projection "weekend_consumption" weekend_consumption_t
   let weekday_consumption = projection "weekday_consumption" weekday_consumption_t
   let address_type = projection "address_type" address_type_t
-  let payed = projection "payed" payed_t
+  let payed = projection "payed" bool
   let family = projection "family" family_t
   let absences = projection "absences" absences_t
 
@@ -417,9 +418,18 @@ module Student = struct
   
   let is_rural = discrete_check "is_rural" "rural" address_type_t
   let is_urban = discrete_check "is_urban" "urban" address_type_t
+  let is_rep = discrete_check "is_rep" "reputation" reason_t
+  let is_prox = discrete_check "is_prox" "proximity" reason_t
 
+  let family_is = {
+    Primitive.name = "family_is";
+    dtype = row => (family_t => bool);
+    source = Value.F (fun v -> match v with
+      | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "family" r) = (Some v)))
+      | _ -> failwith "not a row");
+  }
 
-  let checks = [moderate; poor; is_rural; is_urban]
+  let checks = [moderate; poor; is_rural; is_urban; is_rep; is_prox; family_is]
 
   (* put it all together *)
   let signature = keys @ conversions @ checks
