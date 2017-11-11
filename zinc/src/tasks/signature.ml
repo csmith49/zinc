@@ -573,3 +573,119 @@ module Performance = struct
       ("discussion", Value.Real (float_of_int discussion));
     ]
 end
+
+(* compas data set *)
+module Compas = struct
+  open Primitive.Utility
+
+  (* types for projections and whatnot *)
+  let gender_t = constant_type "Gender"
+  let age_cat_t = constant_type "Age Category"
+  let race_t = constant_type "Race"
+
+  let score = bounded_by 10
+  let counts = bounded_by 15
+  let bracket_t = constant_type "bracket"
+
+  (* schema: sex; age_cat; race; juv_fel; priors_cnt; recidivism; violence; failure to appear *)
+  let gender = projection "gender" gender_t
+  let age_cat = projection "age_cat" age_cat_t
+  let race = projection "race" race_t
+  let juv_felonies = projection "juv_felonies" counts
+  let priors = projection "priors" counts
+  let recidivism = projection "recidivism" score
+  let violence = projection "violence" score
+  let fta = projection "fta" score
+
+  let keys = [gender; age_cat; race; juv_felonies; priors; recidivism; violence; fta]
+
+  (* conversions *)
+  let is_young = discrete_check "is_young" "young" age_cat_t
+  let is_mid_age = discrete_check "is_mid_age" "mid_age" age_cat_t
+  let is_elderly = discrete_check "is_elderly" "elderly" age_cat_t
+
+  let conversions = [is_young; is_mid_age; is_elderly]
+
+  (* utilities *)
+  let race_is = {
+    Primitive.name = "race_is";
+    dtype = row => (race_t => bool);
+    source = Value.F (fun v -> match v with
+    | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "race" r) = (Some v)))
+    | _ -> failwith "not a row");
+  }
+  let is_bracket = {
+    Primitive.name = "is_bracket";
+    dtype = score => (bracket_t => bool);
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.F (fun v -> match v with
+        | Value.Discrete b ->
+          if r < 5.0 && b = "low" then
+            Value.Bool true
+          else if r >= 5.0 && r < 8.0 && b = "medium" then
+            Value.Bool true
+          else if r >= 8.0 && b = "high" then
+            Value.Bool true
+          else
+            Value.Bool false
+        | _ -> failwith "not a discrete value")
+      | _ -> failwith "not a real number")
+  }
+  let to_bracket = {
+    Primitive.name = "to_bracket";
+    dtype = score => bracket_t;
+    source = Value.F (fun v -> match v with
+      | Value.Real r ->
+        if r < 5.0 then
+          Value.Discrete "low"
+        else if r < 8.0 then
+          Value.Discrete "medium"
+        else
+          Value.Discrete "high"
+      | _ -> failwith "not a real value")
+  }
+  let is_low = discrete_check "is_low" "low" bracket_t
+  let is_medium = discrete_check "is_medium" "medium" bracket_t
+  let is_high = discrete_check "is_high" "high" bracket_t
+
+  let is_male = discrete_check "is_male" "male" gender_t
+  let is_female = discrete_check "is_female" "female" gender_t
+
+  let gender_is = {
+    Primitive.name = "gender_is";
+    dtype = row => (gender_t => bool);
+    source = Value.F (fun v -> match v with
+    | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "gender" r) = (Some v)))
+    | _ -> failwith "not a row");
+  }
+
+  let none = {
+    Primitive.name = "none";
+    dtype = counts => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r = 0.0)
+      | _ -> failwith "not a real value")
+  }
+
+  let utilities = [is_bracket; to_bracket; is_low; is_medium; is_high; none; race_is; gender_is]
+
+  (* put it together *)
+  let signature = keys @ conversions @ utilities
+
+  (* and a make function *)
+  (* schema: sex; age_cat; race; juv_fel; priors_cnt; recidivism; violence; failure to appear *)
+  let make 
+    (sex : string) (age_cat : string) (race : string) 
+    (juv_fel : int) (priors : int) (recid : int) 
+    (violence : int) (fta : int) : Value.t =
+    Value.row_of_list [
+      ("sex", Value.Discrete sex);
+      ("age_cat", Value.Discrete age_cat);
+      ("race", Value.Discrete race);
+      ("juv_felonies", Value.Real (float_of_int juv_fel));
+      ("priors", Value.Real (float_of_int priors));
+      ("recidivisim", Value.Real (float_of_int recid));
+      ("violence", Value.Real (float_of_int violence));
+      ("fta", Value.Real (float_of_int fta));
+    ]
+end
