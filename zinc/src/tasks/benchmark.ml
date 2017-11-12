@@ -29,8 +29,11 @@ let to_node : t -> Node.t = fun bm -> {
   Node.root = Name.of_string "start";
   obligation = begin
     let budget = Sensitivity.Const (Rational.of_int bm.budget) in
-    let rel = Sensitivity.Relation.LEq (k, budget) in
-      Constraint.Alt.s_rel rel 
+    (* in reality, we should have lower_bound < k and lower_bound = 0 *)
+    (* but this works, if we assume all sensitivities are bounded below by 1 *)
+    let lower_bound = Sensitivity.Const (Rational.of_int 1) in
+    let open Constraint.Alt in
+      (k <= budget) & (lower_bound <= k)
   end;
   solution = begin
     let context = Context.Empty in
