@@ -84,13 +84,37 @@ let compas_04 = {
   examples = [
     (Value.Bag [
       make "male" "elderly" "white" 0 5 7 2 9;
-      make "male" "elderly" "other" 0 0 4 2 1;
+      make "male" "young" "other" 0 3 4 2 1;
       make "female" "young" "black" 0 0 2 3 8;
+      make "female" "elderly" "white" 0 2 3 4 5;
     ], Value.Bag [
-      Value.Pair (Value.Discrete "male", Value.Real 5.0);
-      Value.Pair (Value.Discrete "female", Value.Real 0.0);
+      Value.Pair (Value.Discrete "male", Value.Real 8.0);
+      Value.Pair (Value.Discrete "female", Value.Real 2.0);
     ]);
   ]
 }
 
-let all = [compas_01; compas_02; compas_03; compas_04]
+(* number of people with high juvenile felonies and a high risk of recidivism *)
+let compas_05 = {
+  name = "compas_05";
+  mechanism = Laplace;
+  budget = 1;
+  grammar = compas_sig;
+  examples = [
+    (Value.Bag [
+      make "male" "elderly" "white" 0 5 8 2 9;
+      make "female" "elderly" "white" 2 5 0 2 9;
+    ], Value.Real 0.0);
+    (Value.Bag [
+      make "female" "elderly" "white" 15 5 8 2 9;
+      make "female" "elderly" "white" 15 5 0 2 9;
+      make "female" "elderly" "white" 1 5 8 2 9;
+    ], Value.Real 1.0);
+    (Value.Bag [
+      make "male" "elderly" "white" 15 5 8 2 9;
+      make "female" "elderly" "white" 2 5 0 2 9;
+    ], Value.Real 1.0);
+  ]
+}
+
+let all = [compas_01; compas_02; compas_03; compas_04; compas_05]

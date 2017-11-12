@@ -258,7 +258,7 @@ module Database = struct
       | _ -> failwith "not a bag");
   }
 
-  let signature = [compare_with; partition; group_map]
+  let signature = [partition; group_map]
 end
 
 (* signature for ADULT benchmarks *)
@@ -666,8 +666,15 @@ module Compas = struct
       | Value.Real r -> Value.Bool (r = 0.0)
       | _ -> failwith "not a real value")
   }
+  let lots = {
+    Primitive.name = "lots";
+    dtype = counts => bool;
+    source = Value.F (fun v -> match v with
+      | Value.Real r -> Value.Bool (r = 15.0)
+      | _ -> failwith "not a real value")
+  }
 
-  let utilities = [is_bracket; to_bracket; is_low; is_medium; is_high; none; race_is; gender_is]
+  let utilities = [is_bracket; to_bracket; is_low; is_medium; is_high; none; lots; race_is; is_male; is_female]
 
   (* put it together *)
   let signature = keys @ conversions @ utilities
@@ -679,12 +686,12 @@ module Compas = struct
     (juv_fel : int) (priors : int) (recid : int) 
     (violence : int) (fta : int) : Value.t =
     Value.row_of_list [
-      ("sex", Value.Discrete sex);
+      ("gender", Value.Discrete sex);
       ("age_cat", Value.Discrete age_cat);
       ("race", Value.Discrete race);
       ("juv_felonies", Value.Real (float_of_int juv_fel));
       ("priors", Value.Real (float_of_int priors));
-      ("recidivisim", Value.Real (float_of_int recid));
+      ("recidivism", Value.Real (float_of_int recid));
       ("violence", Value.Real (float_of_int violence));
       ("fta", Value.Real (float_of_int fta));
     ]
