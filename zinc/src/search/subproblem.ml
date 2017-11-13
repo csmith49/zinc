@@ -37,17 +37,16 @@ let rec variable_proposals (sp : t) : Proposal.t list =
     {
       Proposal.solution = Fterm.Free n;
       Proposal.dtype = dt;
-      Proposal.wildcards = Rlist.Empty;
+      Proposal.wildcards = [];
       Proposal.context = Context.concrete_of_var n dt;
       Proposal.obligation = Constraint.Top;
     } in CCList.map f (variables sp)
 and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
   | (_, prefix, _) ->
-    let bindings = Rlist.to_list prefix in
     let f = fun b -> match b with
       | Fterm.Prefix.BAbs (tag, dt) -> Some (tag, dt)
       | _ -> None
-    in CCList.filter_map f bindings
+    in CCList.filter_map f prefix
 
 (* and of course, if we want a function we can certainly make one *)
 let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
@@ -55,7 +54,7 @@ let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
     let w = sp.root <+ "w" in
     let tag = sp.root <+ "x" in
     let context = Context.Symbolic (sp.root <+ "c") in
-    let wild_bindings = Rlist.Cons (Fterm.Prefix.BWild (w, context, codom), Rlist.Empty) in
+    let wild_bindings = [Fterm.Prefix.BWild (w, context, codom)] in
     Some {
       Proposal.solution = Fterm.Abs (tag, dom, Fterm.Sc (Fterm.Free w));
       Proposal.dtype = sp.goal;
@@ -94,7 +93,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let p = {
         Proposal.solution = Fterm.App (f, Fterm.Free w);
         Proposal.dtype = codom;
-        Proposal.wildcards = Rlist.Cons (binding, prop.Proposal.wildcards);
+        Proposal.wildcards = binding :: prop.Proposal.wildcards;
         Proposal.context = c;
         Proposal.obligation = 
           prop.Proposal.obligation & c_rel (c =. (prop.Proposal.context +. (s *. c_wild)));

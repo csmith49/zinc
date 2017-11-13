@@ -1,53 +1,36 @@
-open CCFun
-open Rlist.Alt
+(* we effectively have heirarchical names, but they're folded up using hash functions *)
+type t = N of string * int
 
-(* string provides readability, int provides uniqueness *)
-type id = Id of string * int
+(* some simple constructors and printers *)
+let of_string (s : string) : t = N (s, 0)
+let to_string : t -> string = function
+  N (s, i) -> s ^ (if i = 0 then "" else ":" ^ (string_of_int i))
 
-(* useful deconstructor *)
-let fst : id -> string = function
-  Id (s, _) -> s
+(* comparison is straightforward - by index, then name *)
+(* no clue if the order actually matters *)
+let compare (l : t) (r : t) : int = match l, r with
+  | N (s, i), N (t, j) ->
+    let ans = CCInt.compare i j in match ans with
+      | 0 -> CCString.compare s t
+      | _ -> ans
 
-(* a name is a history of ids (of agents, contexts, and variables) *)
-type t = id Rlist.t
+(* hashing *)
+let hash : t -> int = function
+  | N (s, i) -> (CCHash.poly s) lxor i
 
-(* when we only have a single entity, the number isn't as important *)
-let add_string (n : t) (s : string) : t =
-  n <+ Id (s, 0)
+(* the thing that makes heirarchical names work *)
+let extend (n : t) (s : string) : t = N (s, hash n)
+let extend_by_name (l : t) (r : t) : t = match l, r with
+  | N (s, i), N (t, j) -> N (s ^ "." ^ t, CCInt.hash (i lxor j))
 
-(* we can make names simply from strings using above *)
-let of_string (s : string) : t = add_string Rlist.Empty s
-
-(* there's many ways to write these out - we go for a readable presentation *)
-let rec to_string : t -> string = fun n -> match n with
-  | Rlist.Empty -> "EMPTY"
-  | Rlist.Cons (i, nm) -> let i' = match i with
-    | Id (s, i) -> s ^ "_" ^ (string_of_int i)
-    in let uniq = match CCHash.poly nm with
-      | 1 -> ""
-      | (_ as u) -> "{" ^ (string_of_int u) ^ "}"
-    in i' ^ uniq
-
-(* a type indicating a list of names *)
-type prefix = t Rlist.t
-
-(* pair up a list of things with names for each *)
-let rec name_list (root : t) (var : string) (ls : 'a list) : (t * 'a) list =
-  name_list' root var 1 ls
-and name_list' (root : t) (var : string) (index : int) (ls : 'a list) : (t * 'a) list = match ls with
-  | x :: xs -> (root <+ Id (var, index), x) :: (name_list' root var (index + 1) xs)
-  | [] -> []
-
-(* simpler syntax *)
+(* the alternate structure makes them more bearable to work with *)
 module Alt = struct
-  let ( ++ ) (n : t) (n' : t) : t = n <++ n'
-  let n (s : string) : t = of_string s
-  let ( <+ ) (n : t) (s : string) = add_string n s
+  let ( <+ ) : t -> string -> t = extend
+  let ( ++ ) : t -> t -> t = extend_by_name
 end
 
-(* for submodules *)
+(* for the stream submodule *)
 type name = t
-let compare = Pervasives.compare
 
 (* naming cycles *)
 module Stream = struct
@@ -59,14 +42,15 @@ module Stream = struct
       loop_counter : int;
     }
     (* pulling a new symbol just means we have to update the pointers *)
-    let draw : t -> id * t = fun c ->
-      let id = Id (CCList.nth c.symbols c.index, c.loop_counter) in
+    let draw : t -> name * t = fun c ->
+      let n = N (CCList.nth c.symbols c.index, c.loop_counter) in
       let index = CCInt.rem (c.index + 1) (CCList.length c.symbols) in
       let loop = if index = 0 then c.loop_counter + 1 else c.loop_counter in
-        (id, {c with index = index; loop_counter = loop;})
+        (n, {c with index = index; loop_counter = loop;})
     (* base construction just takes a symbol list *)
     let of_list : string list -> t = fun ss -> {symbols = ss; index = 0; loop_counter = 0}
   end
+
   (* a stream maintains a separate cycle for each of the kinds of variables we have floating around *)
   type t = {
     root : name;
@@ -75,19 +59,21 @@ module Stream = struct
     sens_symbols : Cycle.t;
     dt_symbols : Cycle.t;
   }
+
+  open Alt
   (* drawing a different kind of symbol needs a different kind of function *)
   let draw_abs : t -> name * t = fun s ->
     let (n, c') = Cycle.draw s.abs_symbols in
-    (s.root <+ n, {s with abs_symbols = c'})
+    (s.root ++ n, {s with abs_symbols = c'})
   let draw_wild : t -> name * t = fun s ->
     let (n, c') = Cycle.draw s.wild_symbols in
-    (s.root <+ n, {s with wild_symbols = c'})
+    (s.root ++ n, {s with wild_symbols = c'})
   let draw_sens : t -> name * t = fun s ->
     let (n, c') = Cycle.draw s.sens_symbols in
-    (s.root <+ n, {s with sens_symbols = c'})
+    (s.root ++ n, {s with sens_symbols = c'})
   let draw_dt : t -> name * t = fun s ->
     let (n, c') = Cycle.draw s.dt_symbols in
-    (s.root <+ n, {s with dt_symbols = c'})
+    (s.root ++ n, {s with dt_symbols = c'})
 (* simplest constructor just takes in a root *)
   let of_root : name -> t = fun r -> {
       root = r;

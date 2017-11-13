@@ -113,15 +113,14 @@ type fterm = t
 
 (* allows us to move across binders in zippers and whatnot *)
 module Prefix = struct
-  open Rlist.Alt
   (* bindings contain all the information to recreate the og fterm *)
   type binding =
     | BAbs of Name.t * Dtype.t
     | BTyAbs of Name.t
     | BSensAbs of Name.t
     | BWild of Name.t * Context.t * Dtype.t
-  (* and prefixes maintain a Rlist of bindings *)
-  type t = binding Rlist.t
+  (* and prefixes maintain a list of bindings *)
+  type t = binding list
   (* I love me some alternative syntax *)
   module Alt = struct
     let (@>) (b : binding) (tm : fterm) : fterm = match b with
@@ -141,13 +140,12 @@ module Prefix = struct
   open Alt
   (* append the entirety of a prefix - not always useful *)
   let rec bind (prefix : t) (tm : fterm) : fterm = match prefix with
-    | Rlist.Empty -> tm
-    | Rlist.Cons (b, prefix') -> bind prefix' (b @> tm)
+    | [] -> tm
+    | b :: prefix' -> bind prefix' (b @> tm)
 end
 
 (* we use Huet style zippers for unfolding/folding fterms as we maneuver *)
 module Zipper = struct
-  open Rlist.Alt
   open Prefix.Alt
   (* type of branches is the derivative of fterms wrt fterms *)
   type branch =
@@ -158,36 +156,37 @@ module Zipper = struct
     (* this contains several derivatives put together - you'll see *)
     | ZBinding
   (* we maintain a current view, the bindings needed, and the branches *)
-  type t = fterm * Prefix.t * branch Rlist.t
+  type t = fterm * Prefix.t * branch list
   (* basic navigation *)
   let up : t -> t option = function
-    | (tm, prefix, Rlist.Cons (branch, branches)) -> begin match branch with
+    | (tm, prefix, branch :: branches) -> begin match branch with
         | ZAppLeft tm' -> Some (App (tm, tm'), prefix, branches)
         | ZAppRight tm' -> Some (App (tm', tm), prefix, branches)
         | ZTyApp dt -> Some (TyApp (tm, dt), prefix, branches)
         | ZSensApp s -> Some (SensApp(tm, s), prefix, branches)
         | ZBinding -> begin match prefix with
-            | Rlist.Cons (binding, bindings) ->
+            | binding :: bindings ->
               Some (binding @> tm, bindings, branches)
             | _ -> None
           end
       end
     | _ -> None
   let right : t -> t option = function
-    | (tm, prefix, Rlist.Cons (ZAppLeft tm', branches)) ->
-      Some (tm', prefix, branches <+ (ZAppRight tm))
+    | (tm, prefix, (ZAppLeft tm') :: branches) ->
+      Some (tm', prefix, (ZAppRight tm) :: branches)
     | _ -> None
   (* because we're going past binders, we'll need to name variables *)
   let down (root : Name.t) (var : string) (z : t) : t option = match z with
-    | (tm, prefix, branches) -> let n = root <+ Name.Id (var, Rlist.size prefix) in match tm with
-      | App (l, r) -> Some (l, prefix, branches <+ (ZAppLeft r))
-      | TyApp (f, arg) -> Some (f, prefix, branches <+ (ZTyApp arg))
-      | SensApp (f, arg) -> Some (f, prefix, branches <+ (ZSensApp arg))
-      | Abs _ | TyAbs _ | SensAbs _ | Wild _ -> begin match n <@ tm with
-          | Some (binding, body) -> Some (body, prefix <+ binding, branches <+ ZBinding)
-          | _ -> None
-        end
-      | _ -> None
+    | (tm, prefix, branches) -> 
+      let open Name.Alt in let n = root <+ (var ^ (string_of_int (CCList.length prefix))) in match tm with
+        | App (l, r) -> Some (l, prefix, (ZAppLeft r) :: branches)
+        | TyApp (f, arg) -> Some (f, prefix, (ZTyApp arg) :: branches)
+        | SensApp (f, arg) -> Some (f, prefix, (ZSensApp arg) :: branches)
+        | Abs _ | TyAbs _ | SensAbs _ | Wild _ -> begin match n <@ tm with
+            | Some (binding, body) -> Some (body, binding :: prefix, ZBinding :: branches)
+            | _ -> None
+          end
+        | _ -> None
   (* simple getter/setter *)
   let get : t -> fterm = function
     | (tm, _, _) -> tm
@@ -201,7 +200,7 @@ module Zipper = struct
   let rec preorder_until (root : Name.t) (var : string) (predicate : fterm -> bool) (z : t) : t option =
     (CCOpt.if_ (fun c -> predicate (get c)) z) <+> ((preorder root var z) >>= (preorder_until root var predicate))
   (* convert to/from fterms *)
-  let of_term : fterm -> t = fun tm -> (tm, Rlist.Empty, Rlist.Empty)
+  let of_term : fterm -> t = fun tm -> (tm, [], [])
   let rec to_term : t -> fterm = fun z -> match up z with
     | Some z' -> to_term z'
     | _ -> get z
@@ -232,7 +231,7 @@ let rec wild_closed : t -> bool = function
 (* printing *)
 let rec to_string : t -> string =
   fun tm ->
-    let stream = Name.Stream.of_root Rlist.Empty in
+    let stream = Name.Stream.of_root (Name.of_string "") in
     fst (to_string' tm stream)
 and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm with
   | Free n -> (Name.to_string n, s)
@@ -274,7 +273,7 @@ and to_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm w
 (* printing that ignores all the type annotations on terms *)
 let rec to_clean_string : t -> string =
   fun tm ->
-    let stream = Name.Stream.of_root Rlist.Empty in
+    let stream = Name.Stream.of_root (Name.of_string "") in
     fst (to_clean_string' tm stream)
 and to_clean_string' (tm : t) (s : Name.Stream.t): string * Name.Stream.t = match tm with
   | Free n -> (Name.to_string n, s)
