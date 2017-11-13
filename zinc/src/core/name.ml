@@ -21,7 +21,7 @@ let hash : t -> int = function
 (* the thing that makes heirarchical names work *)
 let extend (n : t) (s : string) : t = N (s, hash n)
 let extend_by_name (l : t) (r : t) : t = match l, r with
-  | N (s, i), N (t, j) -> N (s ^ "." ^ t, CCInt.hash (i lxor j))
+  | N (s, i), N (t, j) -> N (t, (CCInt.hash i) lxor (CCInt.hash j) lxor (CCHash.poly s))
 
 (* the alternate structure makes them more bearable to work with *)
 module Alt = struct
