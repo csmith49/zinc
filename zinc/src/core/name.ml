@@ -11,17 +11,18 @@ let to_string : t -> string = function
 let compare (l : t) (r : t) : int = match l, r with
   | N (s, i), N (t, j) ->
     let ans = CCInt.compare i j in match ans with
-      | 0 -> CCString.compare s t
+      | 0 -> String.compare s t
       | _ -> ans
 
 (* hashing *)
-let hash : t -> int = function
-  | N (s, i) -> (CCHash.poly s) lxor i
+(* let hash : t -> int = function
+  | N (s, i) -> (CCHash.poly s) lxor (CCInt.hash i) *)
+let hash : t -> int = CCHash.poly
 
 (* the thing that makes heirarchical names work *)
 let extend (n : t) (s : string) : t = N (s, hash n)
 let extend_by_name (l : t) (r : t) : t = match l, r with
-  | N (s, i), N (t, j) -> N (t, (CCInt.hash i) lxor (CCInt.hash j) lxor (CCHash.poly s))
+  | _, N (t, j) -> N (t, (hash l) lxor (CCInt.hash j))
 
 (* the alternate structure makes them more bearable to work with *)
 module Alt = struct
