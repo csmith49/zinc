@@ -47,7 +47,7 @@ let bm_print : bool = !verbosity >= 3
 
 let string_of_fterm : Fterm.t -> string = if !dont_annotate then Fterm.to_clean_string else Fterm.to_string
 
-let weights : Node.weight = (!p_weight_1, !p_weight_2, !p_weight_3, !p_weight_4)
+let weights : Node.Vector.weight = (!p_weight_1, !p_weight_2, !p_weight_3, !p_weight_4)
 
 let _ = if normal_print then print_endline ("Evaluating benchmark: " ^ !benchmark_name) else ()
 
@@ -69,7 +69,6 @@ let check : Constraint.t -> (bool * Solver.expr list) = match !strategy with
   | _ -> FancyStrategy.check
 
 (* consruct the frontier from the benchmarks start position *)
-module Frontier = Pqueue.Make(Node.Priority)
 let frontier = ref Frontier.empty
 
 (* an exception we throw to exit the loop *)
@@ -88,13 +87,13 @@ let synthesize (bm : Benchmark.t) : unit =
 
   (* generate start node and initialize frontier *)
   let start_node = Benchmark.to_node bm in
-  let _ = frontier := Frontier.push (Node.to_priority weights start_node) start_node !frontier in
+  let _ = frontier := Frontier.push !frontier weights start_node in
   let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.grammar in
   
   (* repeatedly pull nodes and check for satisfiability *)
   while true do
     (* pull from frontier *)
-    let node, p, frontier' = Frontier.pop !frontier in
+    let frontier', node = Frontier.pop !frontier in
     let _ = frontier := frontier' in
     let tm = node.Node.solution in
     let _ = counter := !counter + 1 in
@@ -148,7 +147,7 @@ let synthesize (bm : Benchmark.t) : unit =
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 
-          frontier := Frontier.push (Node.to_priority weights n) n !frontier) steps in
+          frontier := Frontier.push !frontier weights n) steps in
         if bm_print then print_endline "done." else ()
     else
       if more_print then print_endline ("    Unsatisfiable.\n") else ()
