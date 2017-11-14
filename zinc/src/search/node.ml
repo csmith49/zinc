@@ -39,16 +39,17 @@ let int_of_vector : weight -> vector -> int = fun w -> fun v ->
   let a, b, c, d = w in
   a * v.size + b * v.constant + c * v.unconstrained + d * v.infinity
 
-(* size, contants, variables, infinity *)
+(* size, constants, variables, infinity *)
 let default_weight = (1, 0, 0, 0)
 let good_weight = (1, 0, 3, 0)
+let aws_weight = (1, 0, 10, 0)
 
 (* we might as well make this easy *)
 let to_priority : t -> Priority.t = fun n -> 
   (* (CCList.length ( n.obligation |> Constraint.flatten |> Simplify.simplify) , n.solution) *)
-  (* (Fterm.size n.solution, n.solution) *)
+ (* (Fterm.size n.solution, n.solution) *)
   (* (n.obligation |> Constraint.flatten |> Simplify.sensitivity_weight, n.solution) *)
-  (n |> to_vector |> (int_of_vector good_weight), n.solution)
+  (n |> to_vector |> (int_of_vector aws_weight), n.solution)
 
 (* and hijack it for comparisons *)
 let compare (l : t) (r : t) : int = Priority.compare (to_priority l) (to_priority r)
