@@ -11,8 +11,11 @@ let dont_annotate = ref false
 let strategy = ref "fancy"
 let obligation = ref false
 
-let string_of_fterm : Fterm.t -> string = fun tm -> 
-  if !dont_annotate then Fterm.to_clean_string tm else Fterm.to_string tm
+(* the references for the weights, a little overly verbose *)
+let p_weight_1 = ref 1
+let p_weight_2 = ref 0
+let p_weight_3 = ref 10
+let p_weight_4 = ref 0
 
 (* the actual command line arguments *)
 let spec_list = [
@@ -23,7 +26,13 @@ let spec_list = [
   ("-disable", Arg.Set dont_prune, " Disables SAT-pruning");
   ("-annotations", Arg.Set dont_annotate, " Disables type annotations on term output");
   ("-strat", Arg.Set_string strategy, " Sets the SAT strategy");
-  ("-obligation", Arg.Set obligation, " Displays the simplified proof obligation generated.")
+  ("-obligation", Arg.Set obligation, " Displays the simplified proof obligation generated");
+  ("-weights", Arg.Tuple [
+      Arg.Set_int p_weight_1;
+      Arg.Set_int p_weight_2;
+      Arg.Set_int p_weight_3;
+      Arg.Set_int p_weight_4;
+    ], " Sets weights for priority construction");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -35,6 +44,10 @@ let _ = Arg.parse (Arg.align spec_list) anon_function usage_message
 let normal_print : bool = !verbosity >= 1
 let more_print : bool = !verbosity >= 2
 let bm_print : bool = !verbosity >= 3
+
+let string_of_fterm : Fterm.t -> string = if !dont_annotate then Fterm.to_clean_string else Fterm.to_string
+
+let weights : Node.weight = (!p_weight_1, !p_weight_2, !p_weight_3, !p_weight_4)
 
 let _ = if normal_print then print_endline ("Evaluating benchmark: " ^ !benchmark_name) else ()
 
@@ -49,7 +62,6 @@ let benchmark = extract_benchmark !benchmark_name Dataset.all
 (* construct the strategy *)
 module BasicStrategy = Solver.Strategy(Solver.Basic)
 module FancyStrategy = Solver.Strategy(Solver.Fancy)
-
 
 let check : Constraint.t -> (bool * Solver.expr list) = match !strategy with
   | "basic" -> BasicStrategy.check
@@ -76,7 +88,7 @@ let synthesize (bm : Benchmark.t) : unit =
 
   (* generate start node and initialize frontier *)
   let start_node = Benchmark.to_node bm in
-  let _ = frontier := Frontier.push (Node.to_priority start_node) start_node !frontier in
+  let _ = frontier := Frontier.push (Node.to_priority weights start_node) start_node !frontier in
   let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.grammar in
   
   (* repeatedly pull nodes and check for satisfiability *)
@@ -136,7 +148,7 @@ let synthesize (bm : Benchmark.t) : unit =
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 
-          frontier := Frontier.push (Node.to_priority n) n !frontier) steps in
+          frontier := Frontier.push (Node.to_priority weights n) n !frontier) steps in
         if bm_print then print_endline "done." else ()
     else
       if more_print then print_endline ("    Unsatisfiable.\n") else ()
