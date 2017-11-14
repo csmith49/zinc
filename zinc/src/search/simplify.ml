@@ -95,3 +95,28 @@ let link_simplify : t -> t = fixpoint one_step_link_simplify
 
 open CCFun
 let simplify : t -> t = fixpoint (reduce_simplify % assignment_simplify % link_simplify % identity_simplify)
+
+(* we also have some simple ways of extracting what were once sensitivities *)
+let extract_sensitivity : rel -> Sensitivity.t option = fun sr ->
+  match Sensitivity.Relation.rhs sr with
+    | Sensitivity.Plus (_, Sensitivity.Mult (s, _)) -> begin match s with
+        | Sensitivity.Const _ -> Some s
+        | Sensitivity.Free _ -> Some s
+        | _ -> None
+      end
+    | _ -> None
+
+let extract_sensitivities : t -> Sensitivity.t list = fun c ->
+  CCList.filter_map extract_sensitivity c
+
+let is_constant : Sensitivity.t -> bool = function
+  | (Sensitivity.Const _ as c) when not (c = Constants.infinity) -> true
+  | _ -> false
+let is_unconstrained : Sensitivity.t -> bool = function
+  | Sensitivity.Free _ -> true
+  | _ -> false
+let is_infinity : Sensitivity.t -> bool = function
+  | (Sensitivity.Const _ as c) when (c = Constants.infinity) -> true
+  | _ -> false
+
+let print_constraints : t -> unit = CCList.iter (fun sr -> sr |> Sensitivity.Relation.to_string |> print_endline)

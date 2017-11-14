@@ -98,4 +98,8 @@ module Relation = struct
   let fmap (f : sens -> sens) : t -> t = fun sr -> match sr with
     | Eq (l, r) -> Eq (f l, f r)
     | LEq (l, r) -> LEq (f l, f r)
+
+  let rhs : t -> sens = function
+    | Eq (_, r) -> r
+    | LEq (_, r) -> r
 end

@@ -37,6 +37,13 @@ let reduce : t -> t = function
   | Q (n, d) -> if d == 0 then Infinity else
     let g = gcd n d in Q (n / g, d / g)
 
+let closest_int : t -> int = function
+  | Infinity -> failwith "oh no"
+  | Q (n, d) -> 
+    let n' = CCFloat.of_int n in
+    let d' = CCFloat.of_int d in
+    CCFloat.to_int (CCFloat.round (n' /. d'))
+
 (* wrapping math operators as infix *)
 module Infix = struct
   let ( +% ) (a : t) (b : t) : t = add a b

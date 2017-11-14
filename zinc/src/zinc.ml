@@ -9,11 +9,7 @@ let time_it = ref false
 let dont_prune = ref false
 let dont_annotate = ref false
 let strategy = ref "fancy"
-
-(* functions defining the level of printing *)
-let normal_print : string -> unit = fun s -> if !verbosity >= 1 then print_string s else ()
-let more_print : string -> unit = fun s -> if !verbosity >= 2 then print_string s else ()
-let bm_print : string -> unit = fun s -> if !verbosity >= 3 then print_string s else ()
+let obligation = ref false
 
 let string_of_fterm : Fterm.t -> string = fun tm -> 
   if !dont_annotate then Fterm.to_clean_string tm else Fterm.to_string tm
@@ -27,6 +23,7 @@ let spec_list = [
   ("-disable", Arg.Set dont_prune, " Disables SAT-pruning");
   ("-annotations", Arg.Set dont_annotate, " Disables type annotations on term output");
   ("-strat", Arg.Set_string strategy, " Sets the SAT strategy");
+  ("-obligation", Arg.Set obligation, " Displays the simplified proof obligation generated.")
 ]
 
 (* populate the references - no anonymous functions *)
@@ -34,7 +31,12 @@ let usage_message = ""
 let anon_function = fun s -> ()
 let _ = Arg.parse (Arg.align spec_list) anon_function usage_message
 
-let _ = normal_print ("Evaluating benchmark: " ^ !benchmark_name ^ "\n")
+(* define the print levels *)
+let normal_print : bool = !verbosity >= 1
+let more_print : bool = !verbosity >= 2
+let bm_print : bool = !verbosity >= 3
+
+let _ = if normal_print then print_endline ("Evaluating benchmark: " ^ !benchmark_name) else ()
 
 (* main loop happens here *)
 let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t = match bs with
@@ -88,8 +90,9 @@ let synthesize (bm : Benchmark.t) : unit =
     let start_time = Sys.time () in
 
     (* PRINTING *)
-    let _ = normal_print ("Checking: " ^ (string_of_fterm tm) ^ "\n") in
-    let _ = more_print ("    Obligation: " ^ (Constraint.to_string node.Node.obligation) ^ "\n") in
+    let _ = if normal_print then print_endline ("Checking: " ^ (string_of_fterm tm)) else () in
+    let _ = if more_print then 
+      print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) else () in
     let _ = if !pause then (let _ = read_line () in ()) else () in
 
     (* check if the obligation is satisfiable *)
@@ -98,13 +101,14 @@ let synthesize (bm : Benchmark.t) : unit =
     (* update the timer *)
     let sat_check_time = (Sys.time()) -. start_time in 
     let _ = sat_time := sat_check_time +. !sat_time in
-    let _ = if !time_it then normal_print ("    SAT check time: " ^ (string_of_float sat_check_time) ^ "\n") else () in
+    let _ = if !time_it && normal_print then 
+      print_endline ("    SAT check time: " ^ (string_of_float sat_check_time)) else () in
 
     (* if it is, then we either check for termination or expand *)
     let _ = if meets_obligation then
 
       (* PRINTING *)
-      let _ = more_print ("    Satisfiable!\n") in
+      let _ = if more_print then print_endline ("    Satisfiable!") else () in
 
       (* check if tm is a solution *)
       if (Fterm.wild_closed tm) then
@@ -122,26 +126,27 @@ let synthesize (bm : Benchmark.t) : unit =
         let subproblem = Subproblem.of_node (root <+ "w") node in
         let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) in
       
-        let _ = more_print ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal) ^ "\n") in
+        let _ = if more_print then print_endline ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal)) else () in
 
         let f = fun p -> Subproblem.specialize root p subproblem.Subproblem.context in
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
           let ans = Subproblem.insert_proposal p subproblem in
-          let _ = more_print ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no") ^ "\n") in ans)
+          let _ = if more_print then print_endline ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no")) else () in ans)
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
-        let _ = bm_print ("\tInserting expansions into frontier...") in
+        let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 
           frontier := Frontier.push (Node.to_priority n) n !frontier) steps in
-        bm_print ("done.\n")
+        if bm_print then print_endline "done." else ()
     else
-      more_print ("    Unsatisfiable.\n")
+      if more_print then print_endline ("    Unsatisfiable.\n") else ()
     in let _ = if !pause then (let _ = read_line () in ()) else () in
 
     (* update total printer *)
     let total_check_time = (Sys.time ()) -. start_time in
     let _ = total_time := total_check_time +. !total_time in
-    let _ = if !time_it then (normal_print ("    Total time: " ^ (string_of_float total_check_time) ^ "\n")) in
+    let _ = if !time_it && normal_print then
+      print_endline ("    Total time: " ^ (string_of_float total_check_time)) else () in
     ()
   done;;
 
@@ -149,7 +154,11 @@ let synthesize (bm : Benchmark.t) : unit =
 try synthesize benchmark with
   | SynthSuccess node -> 
     let _ = print_endline ("Solution found: " ^ (string_of_fterm node.Node.solution)) in
-    let _ = bm_print ("Solutions explored: " ^ (string_of_int !counter) ^ "\n") in
+    let _ = if bm_print then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
-    ()
+    let _ = if !obligation then
+      node.Node.obligation |> Constraint.flatten
+                           |> Simplify.simplify
+                           |> Simplify.print_constraints
+      else () in ()
