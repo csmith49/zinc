@@ -59,7 +59,7 @@ module Frontier = Pqueue.Make(Node.Priority)
 let frontier = ref Frontier.empty
 
 (* an exception we throw to exit the loop *)
-exception SynthSuccess of Fterm.t
+exception SynthSuccess of Node.t
 
 (* we use a counter for stat-keeping purposes, and for making sure node roots are unique *)
 let counter = ref 0
@@ -113,7 +113,7 @@ let synthesize (bm : Benchmark.t) : unit =
           with _ -> false
           in
         if meets_examples then 
-          let _ = total_time := ((Sys.time ()) -. start_time) +. !total_time in raise (SynthSuccess tm) 
+          let _ = total_time := ((Sys.time ()) -. start_time) +. !total_time in raise (SynthSuccess node) 
         else ()
       
       (* if not, and there's a wild binder, find all expansions *)
@@ -147,8 +147,8 @@ let synthesize (bm : Benchmark.t) : unit =
 
 (* run the experiment, and catch the output *)
 try synthesize benchmark with
-  | SynthSuccess tm -> 
-    let _ = print_endline ("Solution found: " ^ (string_of_fterm tm)) in
+  | SynthSuccess node -> 
+    let _ = print_endline ("Solution found: " ^ (string_of_fterm node.Node.solution)) in
     let _ = bm_print ("Solutions explored: " ^ (string_of_int !counter) ^ "\n") in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in

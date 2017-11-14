@@ -18,7 +18,9 @@ module Priority = struct
 end
 
 (* we might as well make this easy *)
-let to_priority : t -> Priority.t = fun n -> (Fterm.size n.solution, n.solution)
+let to_priority : t -> Priority.t = fun n -> 
+  (CCList.length ( n.obligation |> Constraint.flatten |> Simplify.simplify) , n.solution)
+  (* (Fterm.size n.solution, n.solution) *)
 
 (* and hijack it for comparisons *)
 let compare (l : t) (r : t) : int = Priority.compare (to_priority l) (to_priority r)

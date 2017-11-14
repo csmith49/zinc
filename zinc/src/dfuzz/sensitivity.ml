@@ -43,6 +43,27 @@ module Alt = struct
   let s (n : string) : t = Free (Name.of_string n)
 end
 
+(* and utilities for substituting outside the context of binders *)
+type sens = t
+
+module Sub = struct
+  module NameMap = CCMap.Make(Name)
+  type t = sens NameMap.t
+
+  let rec apply (s : sens) (sub : t) : sens = match s with
+    | Free n -> NameMap.get_or ~default:s n sub
+    | Plus (l, r) -> Plus (apply l sub, apply r sub)
+    | Mult (l, r) -> Mult (apply l sub, apply r sub)
+    | Succ r -> Succ (apply r sub)
+    | _ -> s
+
+  let empty = NameMap.empty
+
+  let add : Name.t -> sens -> t -> t = NameMap.add
+
+  let of_list : (Name.t * sens) list -> t = NameMap.of_list
+end
+
 (* printing *)
 let rec to_string : t -> string = function
   | Free n -> Name.to_string n
@@ -59,9 +80,6 @@ let rec to_string : t -> string = function
   | Zero -> "0"
   | Succ s -> (to_string s) ^ " + 1"
 
-(* we need to reference it later *)
-type sens = t
-
 module Relation = struct
   type t =
     | Eq of sens * sens
@@ -76,4 +94,8 @@ module Relation = struct
       let l' = to_string l in
       let r' = to_string r in
         l' ^ " <= " ^ r'
+
+  let fmap (f : sens -> sens) : t -> t = fun sr -> match sr with
+    | Eq (l, r) -> Eq (f l, f r)
+    | LEq (l, r) -> LEq (f l, f r)
 end
