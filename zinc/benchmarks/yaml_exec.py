@@ -32,9 +32,9 @@ def extract_commands(bm):
             if "values" in cmd.keys():
                 # grab the values
                 values = cmd["values"]
-                prod.append(values)
+                prod.append(str(v) for v in values)
                 # check and see if we actually have some choice here
-                if len(values) >= 1:
+                if len(values) > 1:
                     choices.append( (flag, len(prod) - 1) )
             # tack it on there
     return itertools.product(*prod), choices
