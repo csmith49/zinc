@@ -15,7 +15,11 @@ def time_it(cmd, timeout):
 
 # given a benchmark, we need to be able to extract all the commands to run and time
 def extract_commands(bm):
+    # initialize the command - main proc here is to build a list of lists and take the product
     prod = [[bm["command"]]]
+    # but we'll also maintain a list of indices/keys for when we make a choice
+    choices = []
+    # so loop, keeping track of the index a thing gets put into prod
     for cmd in bm["arguments"]:
         # check to see if its a param
         if "parameter" in cmd.keys():
@@ -23,15 +27,17 @@ def extract_commands(bm):
         # check to see if it's a flag
         if "flag" in cmd.keys():
             flag = cmd["flag"]
-            args = []
+            prod.append(["-{}".format(flag)])
             # and if there are values to be passed to the flag
             if "values" in cmd.keys():
+                # grab the values
                 values = cmd["values"]
-                args = ["-{} {}".format(flag, v) for v in values]
-            else: args = ["-{}".format(flag)]
-            # now put it all together, and don't forget to hyphenate the flag
-            prod.append(args)
-    return itertools.product(*prod)
+                prod.append(values)
+                # check and see if we actually have some choice here
+                if len(values) >= 1:
+                    choices.append( (flag, len(prod) - 1) )
+            # tack it on there
+    return itertools.product(*prod), choices
 
 if __name__ == "__main__":
     # construct the yaml parser
@@ -49,11 +55,13 @@ if __name__ == "__main__":
         benchmark = yaml.load(f.read())
 
     # get the commands and timeout
-    cmds = extract_commands(benchmark)
+    cmds, choices = extract_commands(benchmark)
     timeout = int(benchmark["timeout"])
+
+    # print out our keys
+    print("\t".join([p[0] for p in choices] + ["time"]))
 
     # now run them all
     for cmd in cmds:
-        print(" ".join(cmd))
         dur = time_it(cmd, timeout)
-        print("{}".format(dur))
+        print("\t".join([cmd[p[1]] for p in choices] + ["{}".format(dur)]))
