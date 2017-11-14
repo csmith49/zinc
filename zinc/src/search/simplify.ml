@@ -1,6 +1,8 @@
 type rel = Sensitivity.Relation.t
 type t = rel list
 
+let print_constraints : t -> unit = CCList.iter (fun sr -> sr |> Sensitivity.Relation.to_string |> print_endline)
+
 (* type just for constant assignment *)
 type const_assignment = Name.t * Rational.t
 
@@ -33,10 +35,13 @@ let fixpoint (f : 'a -> 'a) : 'a -> 'a =
     let step = f a in if a = step then a else g (step)
   in g
 
+let rec bounded_fixpoint (n : int) (f : 'a -> 'a) : 'a -> 'a =
+  fun a -> let step = f a in if n = 0 || step = a then step else bounded_fixpoint (n - 1) f step
+
 (* now simplification *)
 let one_step_assignment_simplify : t -> t = fun c ->
-  let cal, c = separate_assignments c in apply_assignments c cal
-let assignment_simplify : t -> t = fixpoint one_step_assignment_simplify
+  let cal, c = separate_assignments c in CCList.sort compare (apply_assignments c cal)
+let assignment_simplify : t -> t = bounded_fixpoint 30 one_step_assignment_simplify
 
 (* we have a notion of arithmetic simplification as well, but not necessary for building the metric *)
 module Constants = struct
@@ -118,5 +123,3 @@ let is_unconstrained : Sensitivity.t -> bool = function
 let is_infinity : Sensitivity.t -> bool = function
   | (Sensitivity.Const _ as c) when (c = Constants.infinity) -> true
   | _ -> false
-
-let print_constraints : t -> unit = CCList.iter (fun sr -> sr |> Sensitivity.Relation.to_string |> print_endline)

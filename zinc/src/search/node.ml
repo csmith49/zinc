@@ -14,8 +14,10 @@ type vector = {
 type weight = int * int * int * int
 
 let to_vector : t -> vector = fun n ->
-  let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in
-  let sensitivities = Simplify.extract_sensitivities (c) in
+let c = n.obligation |> Constraint.flatten in
+
+(* let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in *)
+let sensitivities = Simplify.extract_sensitivities (c) in
   {
     size = Fterm.size n.solution;
     constant = CCList.length (CCList.filter Simplify.is_constant sensitivities);
@@ -46,7 +48,4 @@ let aws_weight = (1, 0, 10, 0)
 
 (* we might as well make this easy *)
 let to_priority : weight -> t -> Priority.t = fun w -> fun n -> 
-  (* (CCList.length ( n.obligation |> Constraint.flatten |> Simplify.simplify) , n.solution) *)
- (* (Fterm.size n.solution, n.solution) *)
-  (* (n.obligation |> Constraint.flatten |> Simplify.sensitivity_weight, n.solution) *)
   (n |> to_vector |> (int_of_vector w), n.solution)

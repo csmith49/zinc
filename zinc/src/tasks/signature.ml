@@ -258,7 +258,7 @@ module Database = struct
       | _ -> failwith "not a bag");
   }
 
-  let signature = [partition; group_map]
+  let signature = [partition; group_map; compare_with]
 end
 
 (* signature for ADULT benchmarks *)
@@ -304,17 +304,27 @@ module Adult = struct
   let is_male = discrete_check "is_male" "male" gender_t
   let is_army = discrete_check "is_army" "army" profession_t
   let is_trade = discrete_check "is_trade" "trade" profession_t
+  let is_agriculture = discrete_check "is_agriculture" "agriculture" profession_t
   let is_local = discrete_check "is_local" "local" work_class_t
   let is_federal = discrete_check "is_federal" "federal" work_class_t
 
-  let checks = [gt_40_hrs; is_female; is_male; is_army; is_trade; is_local; is_federal]
+  let checks = [gt_40_hrs; is_female; is_male; is_army; is_trade; is_local; is_federal; is_agriculture]
 
   (* the total signature *)
   let signature = checks @ keys @ conversions
   
   (* and a utility for constructing examples *)
-  let schema = ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"]
-  let make (vs : Value.t list) : Value.t = Value.row_of_list (CCList.combine schema vs)
+  let make (gt : bool) (gender : string) (race : string) (hours : int) (education : int) (profession : string) (w_class : string) (cg : int) : Value.t =
+    Value.row_of_list [
+      ("gt_50k", Value.Bool gt);
+      ("gender", Value.Discrete gender);
+      ("race", Value.Discrete race);
+      ("work_hours", Value.Real (float_of_int hours));
+      ("education_level", Value.Real (float_of_int education));
+      ("profession", Value.Discrete profession);
+      ("work_class", Value.Discrete w_class);
+      ("capital_gains", Value.Real (float_of_int cg));
+    ]
 end
 
 (* arithmetic *)
