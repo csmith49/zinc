@@ -1,4 +1,4 @@
-timeout: 120
+timeout: 300
 command: "../zinc"
 arguments:
   - flag: disable
@@ -6,6 +6,9 @@ arguments:
   - flag: v
     values:
       - 0
+  - flag: weights
+    values:
+      - 1 0 0 0
   - flag: bm
     values:
       - student_01
