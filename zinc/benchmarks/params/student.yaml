@@ -13,6 +13,8 @@ arguments:
       - student_03
       - student_04
       - student_05
+      - student_06
+      - student_07
 filters:
   - id: count
     prefix: "Solutions explored: "
