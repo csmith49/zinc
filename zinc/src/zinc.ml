@@ -60,13 +60,15 @@ let rec extract_benchmark (name : string) (bs : Benchmark.t list) : Benchmark.t 
 let benchmark = extract_benchmark !benchmark_name Dataset.all
 
 (* construct the strategy *)
-module BasicStrategy = Solver.Strategy(Solver.Basic)
-module FancyStrategy = Solver.Strategy(Solver.Fancy)
+(* module BasicStrategy = Solver.Strategy(Solver.Basic)
+module FancyStrategy = Solver.Strategy(Solver.Fancy) *)
 
-let check : Constraint.t -> (bool * Solver.expr list) = match !strategy with
+(* let check : Constraint.t -> (bool * Solver.expr list) = match !strategy with
   | "basic" -> BasicStrategy.check
   | "fancy" -> FancyStrategy.check
-  | _ -> FancyStrategy.check
+  | _ -> FancyStrategy.check *)
+
+let check : Constraint.t -> bool = fun c -> true
 
 (* consruct the frontier from the benchmarks start position *)
 let frontier = ref Frontier.empty
@@ -107,7 +109,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let _ = if !pause then (let _ = read_line () in ()) else () in
 
     (* check if the obligation is satisfiable *)
-    let meets_obligation = if !dont_prune then true else fst (check node.Node.obligation) in
+    let meets_obligation = if !dont_prune then true else check node.Node.obligation in
     
     (* update the timer *)
     let sat_check_time = (Sys.time()) -. start_time in 
@@ -143,7 +145,13 @@ let synthesize (bm : Benchmark.t) : unit =
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
           let ans = Subproblem.insert_proposal p subproblem in
-          let _ = if more_print then print_endline ("\tExpansion: " ^ "\n\t    " ^ (Proposal.to_string p) ^ "...\n\t    " ^ (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ (if CCOpt.is_some ans then "ok" else "no")) else () in ans)
+          let _ = if more_print then 
+            print_endline 
+              ("\tExpansion: " ^ "\n\t    " ^ 
+              (Proposal.to_string p) ^ "...\n\t    " ^ 
+              (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ 
+              (if CCOpt.is_some ans then "ok" else "no")) else ()
+            in ans)
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 

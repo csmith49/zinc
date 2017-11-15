@@ -15,6 +15,14 @@ type t =
   | Top
   | Conjunction of Relation.t * t
 
+let rec join (l : t) (r : t) : t option = match l, r with
+  | Unsat, _ | _, Unsat -> None
+  | Top, (_ as c) -> Some c
+  | (_ as c), Top -> Some c
+  | Conjunction (l, ls), Conjunction (r, rs) -> match join ls rs with
+    | Some cs -> Some (Conjunction (l, Conjunction (r, cs)))
+    | _ -> None
+
 let is_unsat : t -> bool = function
   | Unsat -> true
   | _ -> false

@@ -69,16 +69,19 @@ open Constraint.Alt
 (* plugging a proposal back in to get a node *)
 (* last third of the ~> relation *)
 let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
-  let phi, sub = Inference.subtype_unify sp.root sp.goal p.Proposal.dtype in
-  if not (Constraint.is_unsat phi) && not (Inference.Sub.is_impossible sub) then
-  Some {
-    Node.root = sp.root;
-    (* Node.obligation = (c_rel (p.Proposal.context =. sp.context)) & phi & p.Proposal.obligation & sp.obligation; *)
-    Node.obligation = phi & p.Proposal.obligation & sp.obligation;
-    Node.solution =
-      Inference.Sub.apply_fterm sub (Fterm.Prefix.bind p.Proposal.wildcards (Fterm.Zipper.to_term (Fterm.Zipper.set p.Proposal.solution sp.hole)));
-  }
-  else None
+  match Inference.subtype_unify sp.root sp.goal p.Proposal.dtype with
+    | Some (phi, sub) ->  
+      Some {
+        Node.root = sp.root;
+        Node.obligation = phi & p.Proposal.obligation & sp.obligation;
+        Node.solution =
+          Inference.Sub.apply_fterm 
+            sub 
+            (Fterm.Prefix.bind 
+              p.Proposal.wildcards 
+              (Fterm.Zipper.to_term (Fterm.Zipper.set p.Proposal.solution sp.hole)));
+      }
+    | None -> None
 
 let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : Proposal.t list =
   let recurse = match prop.Proposal.dtype with

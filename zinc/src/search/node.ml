@@ -40,8 +40,9 @@ module Priority = struct
 end
 
 let to_vector : t -> Vector.t = fun n ->
-  let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in
-  let sensitivities = Simplify.extract_sensitivities (c) in  
+let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in
+(* let c = n.obligation |> Constraint.flatten in *)
+let sensitivities = Simplify.extract_sensitivities (c) in  
   {
     Vector.size = Fterm.size n.solution;
     constant = CCList.length (CCList.filter Simplify.is_constant sensitivities);
