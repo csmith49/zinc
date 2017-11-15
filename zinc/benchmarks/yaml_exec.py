@@ -4,14 +4,26 @@ import subprocess
 import time
 import itertools
     
+def split_output(lines, prefixes):
+    output = []
+    for _, prefix in prefixes:
+        line = list(filter(lambda l: l.startswith(prefix), lines))[0]
+        output.append(line.split(prefix)[-1])
+    return output
+
 # this function forms the core of the operation
-def time_it(cmd, timeout):
+def time_it(cmd, timeout, prefixes):
     try:
         start_time = time.time()
-        subprocess.run(" ".join(cmd), shell=True, timeout=timeout, stdout=subprocess.DEVNULL)
-        return time.time() - start_time
+        output_lines = subprocess.run(" ".join(cmd), 
+            shell=True, 
+            timeout=timeout, 
+            stdout=subprocess.PIPE,
+            universal_newlines=True).stdout.split("\n")
+        t = time.time() - start_time
+        return t, split_output(output_lines, prefixes)
     except subprocess.TimeoutExpired as e:
-        return timeout
+        return timeout, []
 
 # given a benchmark, we need to be able to extract all the commands to run and time
 def extract_commands(bm):
@@ -37,7 +49,10 @@ def extract_commands(bm):
                 if len(values) > 1:
                     choices.append( (flag, len(prod) - 1) )
             # tack it on there
-    return itertools.product(*prod), choices
+    if "filters" in bm.keys():
+        prefixes = [(cmd["id"], cmd["prefix"]) for cmd in bm["filters"]]
+    else: prefixes = []
+    return itertools.product(*prod), choices, prefixes
 
 if __name__ == "__main__":
     # construct the yaml parser
@@ -55,13 +70,13 @@ if __name__ == "__main__":
         benchmark = yaml.load(f.read())
 
     # get the commands and timeout
-    cmds, choices = extract_commands(benchmark)
+    cmds, choices, prefixes = extract_commands(benchmark)
     timeout = int(benchmark["timeout"])
 
     # print out our keys
-    print("\t".join([p[0] for p in choices] + ["time"]))
+    print("\t".join([p[0] for p in choices] + ["time"] + [p[0] for p in prefixes]))
 
     # now run them all
     for cmd in cmds:
-        dur = time_it(cmd, timeout)
-        print("\t".join([cmd[p[1]] for p in choices] + ["{}".format(dur)]))
+        dur, output = time_it(cmd, timeout, prefixes)
+        print("\t".join([cmd[p[1]] for p in choices] + ["{}".format(dur)] + output))

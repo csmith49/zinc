@@ -94,4 +94,50 @@ let student_05 = {
   ]
 }
 
-let all = [student_01; student_02; student_03; student_04; student_05]
+(* cumulative absences per attendance reason *)
+let student_06 = {
+  name = "student_06";
+  mechanism = Partition (
+    Signature.Student.reason_t,
+    [Value.Discrete "proximity"; Value.Discrete "reputation"; Value.Discrete "other"]);
+  budget = 100;
+  grammar = student_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      Signature.Student.make 10 "reputation" 5 5 "rural" false 3 10;
+      Signature.Student.make 20 "reputation" 0 0 "rural" true 2 1;
+      Signature.Student.make 17 "proximity" 4 3 "urban" true 5 3;
+      Signature.Student.make 3 "other" 3 4 "urban" false 0 2
+    ], Value.Bag [
+      Value.Pair (Value.Discrete "reputation", Value.Real 11.0);
+      Value.Pair (Value.Discrete "proximity", Value.Real 3.0);
+      Value.Pair (Value.Discrete "other", Value.Real 2.0);
+    ])
+  ];
+}
+
+(* most common address type for students with poor family relations *)
+let student_07 = {
+  name = "student_07";
+  mechanism = Exponential (
+    Signature.Student.family_t, 
+    [Value.Discrete "rural"; Value.Discrete "urban";]);
+  budget = 5;
+  grammar = student_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      Signature.Student.make 10 "reputation" 5 5 "rural" false 2 10;
+      Signature.Student.make 20 "reputation" 0 0 "rural" true 2 0;
+      Signature.Student.make 9 "proximity" 4 3 "urban" true 0 3;
+    ], Value.Discrete "rural");
+    (* (Value.Bag [
+      Signature.Student.make 10 "reputation" 5 5 "rural" false 3 10;
+      Signature.Student.make 18 "reputation" 0 0 "rural" true 2 0;
+      Signature.Student.make 20 "proximity" 4 3 "urban" true 1 3;
+      Signature.Student.make 20 "proximity" 4 3 "urban" true 1 3;
+      Signature.Student.make 20 "proximity" 4 3 "urban" true 1 3;
+      ], Value.Discrete "urban") *)
+  ]
+}
+
+let all = [student_01; student_02; student_03; student_04; student_05; student_06; student_07]

@@ -1,0 +1,20 @@
+timeout: 60
+command: "../zinc"
+arguments:
+  - flag: disable
+  - flag: count
+  - flag: v
+    values:
+      - 0
+  - flag: bm
+    values:
+      - performance_01
+      - performance_02
+      - performance_03
+      - performance_04
+      - performance_05
+      - performance_06
+      - performance_07
+filters:
+  - id: count
+    prefix: "Solutions explored: "

@@ -1,0 +1,20 @@
+timeout: 60
+command: "../zinc"
+arguments:
+  - flag: disable
+  - flag: count
+  - flag: v
+    values:
+      - 0
+  - flag: bm
+    values:
+      - compas_01
+      - compas_02
+      - compas_03
+      - compas_04
+      - compas_05
+      - compas_06
+      - compas_07
+filters:
+  - id: count
+    prefix: "Solutions explored: "

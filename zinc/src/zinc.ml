@@ -10,6 +10,7 @@ let dont_prune = ref false
 let dont_annotate = ref false
 let strategy = ref "fancy"
 let obligation = ref false
+let counting = ref false
 
 (* the references for the weights, a little overly verbose *)
 let p_weight_1 = ref 1
@@ -33,6 +34,7 @@ let spec_list = [
       Arg.Set_int p_weight_3;
       Arg.Set_int p_weight_4;
     ], " Sets weights for priority construction");
+  ("-count", Arg.Set counting, " Enables counting of solutions explored");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -173,7 +175,7 @@ let synthesize (bm : Benchmark.t) : unit =
 try synthesize benchmark with
   | SynthSuccess node -> 
     let _ = print_endline ("Solution found: " ^ (string_of_fterm node.Node.solution)) in
-    let _ = if bm_print then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
+    let _ = if !counting then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
     let _ = if !obligation then

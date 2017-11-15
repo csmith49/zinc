@@ -127,4 +127,54 @@ let performance_05 = {
   ]
 }
 
-let all = [performance_01; performance_02; performance_03; performance_04; performance_05]
+
+(* are parents satisfied when their child misses a lot of school *)
+let performance_06 = {
+  name = "performance_06";
+  mechanism = Exponential (
+    Make.bool,
+    [Value.Bool true; Value.Bool false;]
+  );
+  budget = 1;
+  grammar = performance_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      make 100 true 2 100 100 100;
+      make 80 true 20 70 90 90;
+      make 50 false 20 0 0 0;
+      make 98 true 10 97 97 97;      
+    ], Value.Bool true);
+    (Value.Bag [
+      make 0 true 2 0 100 100;
+      make 80 false 20 100 90 90;
+      make 50 false 20 0 0 0;
+      make 98 true 10 97 97 97;      
+    ], Value.Bool false)
+  ]
+}
+
+(* cumulative resource usage per bracket *)
+let performance_07 = {
+  name = "performance_07";
+  mechanism = Partition (
+    Signature.Performance.bracket_t,
+    [Value.Discrete "low"; Value.Discrete "medium"; Value.Discrete "high"]
+  );
+  budget = 100;
+  grammar = performance_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      make 100 true 2 100 100 100;
+      make 80 true 20 70 90 90;
+      make 50 false 20 0 0 0;
+      make 98 true 10 97 95 97;      
+    ], Value.Bag [
+      Value.Pair (Value.Discrete "low", Value.Real 0.0);
+      Value.Pair (Value.Discrete "medium", Value.Real 90.0);
+      Value.Pair (Value.Discrete "high", Value.Real 195.0);
+    ]);
+  ]
+}
+
+
+let all = [performance_01; performance_02; performance_03; performance_04; performance_05; performance_06; performance_07]

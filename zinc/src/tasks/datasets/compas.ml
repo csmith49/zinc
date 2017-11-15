@@ -117,4 +117,50 @@ let compas_05 = {
   ]
 }
 
-let all = [compas_01; compas_02; compas_03; compas_04; compas_05]
+(* average recidivism per race *)
+let compas_06 = {
+  name = "compas_06";
+  mechanism = Partition (
+    Signature.Compas.race_t,
+    [Value.Discrete "black"; Value.Discrete "white"; Value.Discrete "other"]
+  );
+  budget = 10;
+  grammar = compas_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      make "male" "elderly" "white" 0 5 7 2 9;
+      make "male" "young" "other" 0 3 4 2 1;
+      make "female" "young" "black" 0 0 2 3 8;
+      make "female" "elderly" "white" 0 2 3 4 5;
+    ], Value.Bag [
+      Value.Pair (Value.Discrete "black", Value.Real 2.0);
+      Value.Pair (Value.Discrete "white", Value.Real 5.0);
+      Value.Pair (Value.Discrete "other", Value.Real 4.0);
+    ]);
+  ]
+}
+
+(* age category with the most priors *)
+let compas_07 = {
+  name = "compas_07";
+  mechanism = Exponential (
+    Signature.Compas.age_cat_t,
+    [Value.Discrete "young"; Value.Discrete "elderly"; Value.Discrete "mid_age"]
+  );
+  budget = 15;
+  grammar = compas_sig @ Signature.Database.signature;
+  examples = [
+    (Value.Bag [
+      make "male" "elderly" "white" 0 5 7 4 9;
+      make "male" "elderly" "other" 0 0 4 2 1;
+      make "male" "young" "black" 2 0 2 3 8;
+    ], Value.Discrete "elderly");
+    (Value.Bag [
+      make "male" "elderly" "white" 2 0 7 8 0;
+      make "male" "elderly" "black" 2 0 4 8 1;
+      make "male" "young" "black" 3 2 2 3 8;
+    ], Value.Discrete "young");
+  ]
+}
+
+let all = [compas_01; compas_02; compas_03; compas_04; compas_05; compas_06; compas_07]
