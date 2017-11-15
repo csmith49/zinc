@@ -1,4 +1,4 @@
-ocb_flags = -r -use-ocamlfind -pkgs 'containers, containers.data, Z3'
+ocb_flags = -r -use-ocamlfind -pkgs 'containers, containers.data'
 ocb = ocamlbuild $(ocb_flags)
 
 .phony: all
