@@ -74,7 +74,7 @@ let adult_04 = {
 let adult_05 = {
   name = "adult_05";
   mechanism = Partition (Signature.Adult.race_t, [Value.Discrete "white"; Value.Discrete "black"]);
-  budget = 20;
+  budget = 1;
   examples = [
     (* example 1 *)
     (* inputs *)

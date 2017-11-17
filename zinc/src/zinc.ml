@@ -11,6 +11,7 @@ let dont_annotate = ref false
 let strategy = ref "fancy"
 let obligation = ref false
 let counting = ref false
+let sizing = ref false
 
 (* the references for the weights, a little overly verbose *)
 let p_weight_1 = ref 1
@@ -35,6 +36,7 @@ let spec_list = [
       Arg.Set_int p_weight_4;
     ], " Sets weights for priority construction");
   ("-count", Arg.Set counting, " Enables counting of solutions explored");
+  ("-size", Arg.Set sizing, " Enables size checking for programs and simplified constraints");
 ]
 
 (* populate the references - no anonymous functions *)
@@ -178,8 +180,12 @@ try synthesize benchmark with
     let _ = if !counting then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
-    let _ = if !obligation then
+    let obs =
       node.Node.obligation |> Constraint.flatten
                            |> Simplify.simplify
-                           |> Simplify.print_constraints
-      else () in ()
+    in 
+    let _ = if !obligation then Simplify.print_constraints obs else () in
+    let _ = if !sizing then print_endline ("Solution size: " ^ (node.Node.solution |> Fterm.size |> string_of_int)) else () in
+    let _ = if !sizing then print_endline ("Obligation size: " ^ (obs |> CCList.length |> string_of_int)) else ()
+    in ()
+ 
