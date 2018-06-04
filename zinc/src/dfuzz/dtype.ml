@@ -8,9 +8,9 @@ type t =
   | Tensor of t * t
   | Base of base
   | Bounded of bounded
+  | MSet of t
 and precise =
   | N of Sensitivity.t
-  | M of Sensitivity.t * t
   | R of Sensitivity.t
 and quantifier =
   | Exists
@@ -30,7 +30,6 @@ and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Free n' -> if n = n' then (Bound db) else dt
   | Precise p -> begin match p with
       | N s -> Precise (N (Sensitivity.abstract' n db s))
-      | M (s, dt') -> Precise (M (Sensitivity.abstract' n db s, abstract' n db dt'))
       | R s -> Precise (R (Sensitivity.abstract' n db s))
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (abstract' n (db + 1) body))
@@ -41,21 +40,20 @@ and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Bounded b -> begin match b with
       | BR s -> Bounded (BR (Sensitivity.abstract' n db s))
     end
+  | MSet dt -> MSet (abstract' n db dt)
   | _ -> dt (* catches Base and Bound case *)
 
 let rec instantiate (img : t) (s : scope) : t = match s with
   | Sc body -> instantiate' img 0 body
 and instantiate' (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i = db then img else dt
-  | Precise p -> begin match p with
-      | M (s, dt') -> Precise (M (s, instantiate' img db dt'))
-      | _ -> Precise p
-    end
+  | Precise p -> Precise p
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate' img (db + 1) body))
   | Func (m, codom) -> begin match m with
       | Modal (s, dom) -> Func (Modal (s, instantiate' img db dom), instantiate' img db codom)
     end
   | Tensor (l, r) -> Tensor (instantiate' img db l, instantiate' img db r)
+  | MSet dt -> MSet (instantiate' img db dt)
   | _ -> dt
 
 let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
@@ -63,7 +61,6 @@ let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
 and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt with
   | Precise p -> begin match p with
       | N s -> Precise (N (Sensitivity.instantiate' img db s))
-      | M (s, dt') -> Precise (M (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
       | R s -> Precise (R (Sensitivity.instantiate' img db s))
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate_sens' img (db + 1) body))
@@ -77,6 +74,7 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt w
   | Bounded b -> begin match b with
       | BR s -> Bounded (BR (Sensitivity.instantiate' img db s))
     end
+  | MSet dt -> MSet (instantiate_sens' img db dt)
   | _ -> dt
 
 (* submodules will want to refer to this type *)
@@ -115,10 +113,6 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
       | N sens ->
         let sens' = Sensitivity.to_string sens in
         ("N[" ^ sens' ^ "]", s)
-      | M (sens, dt') ->
-        let sens' = Sensitivity.to_string sens in
-        let dt'', s' = to_string' dt' s in
-        ("M[" ^ sens' ^ ", " ^ dt'' ^ "]", s')
       | R sens ->
         let sens' = Sensitivity.to_string sens in
         ("R[" ^ sens' ^ "]", s)
@@ -144,7 +138,10 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
     let l', s' = to_string' l s in
     let r', s'' = to_string' r s' in
     ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
-  | Base b -> (b, s) 
+  | Base b -> (b, s)
+  | MSet dt ->
+    let dt', s' = to_string' dt s in
+      ("MSet[" ^ dt' ^ "]", s')
   | Bounded b -> begin match b with
       | BR b -> ("BR[" ^ (Sensitivity.to_string b) ^ "]", s)
     end
@@ -158,7 +155,6 @@ let rec free_vars : t -> Name.t list = function
   | Free n -> [n]
   | Precise p -> begin match p with
       | N s -> Sensitivity.free_vars s
-      | M (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
       | R s -> Sensitivity.free_vars s
     end
   | Quant (_, _, Sc body) -> free_vars body
@@ -167,6 +163,7 @@ let rec free_vars : t -> Name.t list = function
   | Bounded b -> begin match b with
       | BR s -> Sensitivity.free_vars s
     end
+  | MSet dt -> free_vars dt
   | _ -> []
 
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)

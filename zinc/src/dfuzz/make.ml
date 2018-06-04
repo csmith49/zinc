@@ -26,7 +26,8 @@ let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 (* precise type constructors *)
 let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.R s)
 let p_int (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.N s)
-let mset (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.M (snd p, fst p))
+
+let mset (dt : Dtype.t) : Dtype.t = Dtype.MSet dt
 
 (* and bounded type constructors *)
 let bounded (s : Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.BR s)

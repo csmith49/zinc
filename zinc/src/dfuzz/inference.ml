@@ -11,7 +11,6 @@ let rec subtype (root : Name.t) (bigger : Dtype.t) (smaller : Dtype.t) : Constra
     | Precise p, Precise q -> begin match p, q with
         | N s, N s' -> s == s'
         | R s, R s' -> s == s'
-        | M (s, dt), M (s', dt') -> (s == s') & (subtype root dt dt')
         | _ -> unsat
       end
     (* function types *)
@@ -33,6 +32,7 @@ let rec subtype (root : Name.t) (bigger : Dtype.t) (smaller : Dtype.t) : Constra
     | Bounded l, Bounded r -> begin match l, r with
         | BR s, BR s' -> s == s'
       end
+    | MSet l, MSet r -> subtype root l r
     | _ -> unsat
 and subtype_modal (root : Name.t) (bigger : Dtype.modal) (smaller : Dtype.modal) : Constraint.t =
   (* reflexivity *)
@@ -138,61 +138,6 @@ module Util = struct
 end
 open Util
 
-(* a non-recursive approach *)
-(* probably don't use this one *)
-let st_un (root : Name.t) (wl : Util.wlist) : Util.t option = 
-  (* setting up worklist / result *)
-  let worklist = ref wl in
-  let avoiding = ref [] in
-  let result = ref (Some (top, Sub.empty)) in
-  let root = ref root in
-  (* loop for ages *)
-  let _ = while (not (CCFQueue.is_empty !worklist) && not (CCOpt.is_none !result)) do
-    (* update the worklist by pulling out the next *)
-    let p, wl = CCFQueue.take_front_exn !worklist in
-    let _ = worklist := wl in
-    (* then pattern match to update the worklist with new elements *)
-    let l, r = p in if l = r then () else match l, r with
-      | Free n, (_ as r) -> result := !result << (n, r)
-      | (_ as l), Free m -> result := !result << (m, l)
-      | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') -> begin
-          result := (s' <= s) >> !result;
-          worklist := (codom, codom') ++> ((dom', dom) ++> !worklist);
-        end
-      | Tensor (l, r), Tensor (l', r') ->
-        worklist := (r, r') ++> ((l, l') ++> !worklist);
-      | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
-          | KSens ->
-            let n = !root <+ "SENS_ST_UNIFY" in
-            let _ = root := n in
-            let free = Sensitivity.Free n in begin
-              avoiding := n :: !avoiding;
-              worklist := (instantiate_sens free body, instantiate_sens free body') ++> !worklist;
-            end
-          | KType -> 
-            let n = !root <+ "DT_ST_UNIFY" in
-            let _ = root := n in
-            let free = Free n in begin
-              avoiding := n :: !avoiding;
-              worklist := (instantiate free body, instantiate free body') ++> !worklist;
-            end
-        end
-      | Precise p, Precise p' -> begin match p, p' with
-          | N s, N s' -> result := (s == s') >> !result
-          | M (s, dt), M (s', dt') -> begin
-            result := (s == s') >> !result;
-            worklist := (dt, dt') ++> !worklist;
-          end
-          | R s, R s' -> result := (s == s') >> !result
-          | _ -> result := None
-        end
-      | Bounded b, Bounded b' -> begin match b, b' with
-          | BR s, BR s' -> result := (s' <= s) >> !result
-        end
-      | _ -> result := None
-  done in match !result with
-    | Some (c, s) -> if Sub.avoids s !avoiding then !result else None
-    | None -> None
 
   let rec st_unify 
     (root : Name.t)
@@ -237,10 +182,6 @@ let st_un (root : Name.t) (wl : Util.wlist) : Util.t option =
                 | None -> None
                 | Some sol -> st_unify root avoids sol xs
               end
-            | M (s, dt), M (s', dt') -> begin match (s == s') $> solution with
-                | None -> None
-                | Some sol -> st_unify root avoids sol ( (dt, dt') :: xs )
-              end
             | R s, R s' -> begin match (s == s') $> solution with
                 | None -> None
                 | Some sol -> st_unify root avoids sol xs
@@ -253,6 +194,7 @@ let st_un (root : Name.t) (wl : Util.wlist) : Util.t option =
                 | Some sol -> st_unify root avoids sol xs
             end
           end
+        | MSet l, MSet r -> st_unify root avoids solution ((l, r) :: xs)
         | _ -> None
 
 let subtype_unify (root : Name.t) (left : Dtype.t) (right : Dtype.t) : Util.t option =

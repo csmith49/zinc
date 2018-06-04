@@ -64,9 +64,9 @@ module MapReduce = struct
   let filter = {
     Primitive.name = "filter";
     Primitive.dtype = 
-      tbind (a, sbind (n,
-        modal (n, a => bool) -* (modal (one, mset (a, n)) -* mset (a, infinity))
-      ));
+      tbind (a,
+        (a => bool) => (modal (one, mset (a)) -* mset (a))
+      );
     Primitive.source = Value.F (fun v -> match v with
       | Value.F p -> Value.F (fun v -> match v with
         | Value.Bag ts -> Value.Bag (CCList.filter (fun b -> (p b) = (Value.Bool true)) ts)
@@ -77,33 +77,15 @@ module MapReduce = struct
   let map = {
     Primitive.name = "map";
     Primitive.dtype =
-      (* is this actually the right type? what's the sensitivity on the mset input? *)
-      tbind (a, tbind (b, sbind (s, sbind (n, 
-        modal (n, modal (s, a) -* b) -* (modal (one, mset (a, n)) -* mset (b, n))
-      ))));
+      tbind (a, tbind (b, sbind (s,
+        (modal (s, a) -* b) => (modal (one, mset (a)) -* mset (b))
+      )));
     Primitive.source = Value.F (fun v -> match v with
       | Value.F f -> Value.F (fun v -> match v with
         | Value.Bag ts -> Value.Bag (CCList.map f ts)
         | _ -> failwith "can't apply map to a non-bag")
       | _ -> failwith "can't apply a non-function mapper");
   }
-
-  (* let reduce = {
-    Primitive.name = "reduce";
-    Primitive.dtype = 
-      sbind (s, sbind (n, sbind (k,
-        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded k, n)) -* real)
-      )));
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.F f -> Value.F (fun v -> match v with
-        | Value.Bag ts -> begin match ts with
-          | [] -> Value.Real 0.0
-          | _ -> CCList.fold_left (binarize f) (Value.Real 0.0) ts
-        end
-        | _ -> failwith "can't apply reduce to a non-bag")
-      | _ -> failwith "can't apply a non-function reducer"
-    );
-  } *)
 
   let signature = [filter; map]
 end
@@ -112,7 +94,7 @@ end
 module Aggregate = struct
   let count = {
     Primitive.name = "count";
-    dtype = tbind (a, sbind (n, modal (one, mset (a, n)) -* real));
+    dtype = tbind (a, modal (one, mset (a)) -* real);
     source = Value.F (fun v -> match v with
       | Value.Bag ts -> Value.Real (float_of_int (CCList.length ts))
       | _ -> failwith "can't count a non-bag");
@@ -120,7 +102,7 @@ module Aggregate = struct
 
   let sum = {
     Primitive.name = "sum";
-    dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
+    dtype = sbind (s, modal (s, mset (bounded s)) -* real);
     source = Value.F (fun v -> match v with
       | Value.Bag ts -> Value.Real (CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts))
       | _ -> failwith "can't sum a non-bag");
@@ -128,7 +110,7 @@ module Aggregate = struct
 
   let average = {
     Primitive.name = "average";
-    dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
+    dtype = sbind (s, modal (s, mset (bounded s)) -* real);
     source = Value.F (fun v -> match v with
       | Value.Bag ts -> begin match ts with
         | [] -> Value.Real 0.0
@@ -210,9 +192,9 @@ end
 module Database = struct
   let compare_with = {
     Primitive.name = "compare_with";
-    dtype = tbind (a, sbind (s,
-      modal (s, row => a) -* (a => (modal (one, mset (row, s)) -* mset (row, infinity)))
-    ));
+    dtype = tbind (a,
+      (row => a) => (a => (modal (one, mset (row)) -* mset (row)))
+    );
     source = Value.F (fun v -> match v with
       | Value.F project -> Value.F (fun c -> Value.F (
         fun v -> match v with
@@ -223,15 +205,15 @@ module Database = struct
 
   let partition = {
     Primitive.name = "partition";
-    dtype = tbind (a, tbind (b, sbind (s, sbind (n, 
-      modal (one, mset (a, n)) -* (
-        modal (s, (b => a)) -* (
-          modal (one, mset (b, s)) -* (
-            mset (pair (a, mset (b, infinity)), n)
+    dtype = tbind (a, tbind (b,
+      modal (one, mset (a)) -* (
+        (b => a) => (
+          modal (one, mset (b)) -* (
+            mset (pair (a, mset (b)))
           )
         ) 
       )
-    ))));
+    ));
     source = Value.F (fun v -> match v with
       | Value.Bag keys -> Value.F (fun v -> match v with
         | Value.F project -> Value.F (fun v -> match v with
@@ -246,9 +228,9 @@ module Database = struct
 
   let group_map = {
     Primitive.name = "group_map";
-    dtype = tbind (a, tbind (b, tbind (c, sbind (s, sbind (n, 
-      modal (one, mset (pair (a, b), n)) -* (modal (n, b => c) -* mset (pair (a, c), n))
-    )))));
+    dtype = tbind (a, tbind (b, tbind (c, sbind (s,
+      modal (one, mset (pair (a, b))) -* (b => c) => mset (pair (a, c)))
+    )));
     source = Value.F (fun v -> match v with
       | Value.Bag xs -> Value.F (fun v -> match v with
         | Value.F f -> Value.Bag (CCList.map (fun v -> match v with

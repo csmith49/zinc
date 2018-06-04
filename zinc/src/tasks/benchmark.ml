@@ -19,10 +19,10 @@ open Name.Alt
 
 (* goal type depends on the mechanism being used *)
 let goal_type : t -> Dtype.t = fun bm -> match bm.mechanism with
-  | Laplace -> modal (k, mset (row, infinity)) -* real
-  | Exponential (a, _) -> modal (k, mset (row, infinity)) -* (a => real)
+  | Laplace -> modal (k, mset (row)) -* real
+  | Exponential (a, _) -> modal (k, mset (row)) -* (a => real)
   | Partition (a, _) -> 
-    mset (a, infinity) => (modal (k, mset (row, infinity)) -* mset (pair (a, real), infinity))
+    mset (a) => (modal (k, mset (row)) -* mset (pair (a, real)))
 
 (* eventually, we have to convert it into a node *)
 let to_node : t -> Node.t = fun bm -> {
