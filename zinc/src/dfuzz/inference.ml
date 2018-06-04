@@ -59,9 +59,9 @@ module Sub = struct
       sub
       dt
   let avoids_pair (k : Name.t) (v : Dtype.t) (ns : Name.t list) : bool =
-    if CCList.mem k ns then
+    if CCList.mem (=) k ns then
       false
-    else CCList.is_empty (CCList.inter ns (Dtype.free_vars v))
+    else CCList.is_empty (CCList.inter (=) ns (Dtype.free_vars v))
   let avoids (sub : t) (ns : Name.t list) : bool =
     NameMap.for_all (fun k -> fun v -> avoids_pair k v ns) sub
 
