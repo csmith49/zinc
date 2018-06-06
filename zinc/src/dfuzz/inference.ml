@@ -138,64 +138,63 @@ module Util = struct
 end
 open Util
 
-
-  let rec st_unify 
-    (root : Name.t)
-    (avoids : Name.t list)
-    (solution : Util.t) 
-    (wl : (Dtype.t * Dtype.t) list) : Util.t option = match wl with
-    | [] -> begin match solution with
-        | (c, s) -> if Sub.avoids s avoids then Some solution else None
-      end
-    | (l, r) :: xs ->
-      if l = r then st_unify root avoids solution xs
-      else match l, r with
-        | Free n, (_ as r) -> begin match solution <$ (n, r) with
-            | None -> None
-            | Some sol -> st_unify root avoids sol xs
-          end
-        | (_ as l), Free m -> begin match solution <$ (m, l) with
-            | None -> None
-            | Some sol -> st_unify root avoids sol xs
-          end
-        | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') -> begin
-          match (s' <= s) $> solution with
-            | None -> None
-            | Some sol -> st_unify root avoids sol ( (dom', dom) :: (codom, codom') :: xs )
-          end
-        | Tensor (l, r), Tensor (l', r') ->
-          st_unify root avoids solution ( (l, l') :: (r, r') :: xs )
-        | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
-            | KSens ->
-              let n = root <+ "SENS_ST_UNIFY" in
-              let free = Sensitivity.Free n in
-              let wl' = (instantiate_sens free body, instantiate_sens free body') :: xs in
-                st_unify n (n :: avoids) solution wl'
-            | KType ->
-              let n = root <+ "DT_ST_UNIFY" in
-              let free = Free n in
-              let wl' = (instantiate free body, instantiate free body') :: xs in
-                st_unify n (n :: avoids) solution wl'
-          end
-        | Precise p, Precise p' -> begin match p, p' with
-            | N s, N s' -> begin match (s == s') $> solution with
-                | None -> None
-                | Some sol -> st_unify root avoids sol xs
-              end
-            | R s, R s' -> begin match (s == s') $> solution with
-                | None -> None
-                | Some sol -> st_unify root avoids sol xs
-              end
-            | _ -> None
-          end
-        | Bounded b, Bounded b' -> begin match b, b' with
-            | BR s, BR s' -> begin match (s == s') $> solution with
-                | None -> None
-                | Some sol -> st_unify root avoids sol xs
+let rec st_unify 
+  (root : Name.t)
+  (avoids : Name.t list)
+  (solution : Util.t) 
+  (wl : (Dtype.t * Dtype.t) list) : Util.t option = match wl with
+  | [] -> begin match solution with
+      | (c, s) -> if Sub.avoids s avoids then Some solution else None
+    end
+  | (l, r) :: xs ->
+    if l = r then st_unify root avoids solution xs
+    else match l, r with
+      | Free n, (_ as r) -> begin match solution <$ (n, r) with
+          | None -> None
+          | Some sol -> st_unify root avoids sol xs
+        end
+      | (_ as l), Free m -> begin match solution <$ (m, l) with
+          | None -> None
+          | Some sol -> st_unify root avoids sol xs
+        end
+      | Func (Modal (s, dom), codom), Func (Modal (s', dom'), codom') -> begin
+        match (s' <= s) $> solution with
+          | None -> None
+          | Some sol -> st_unify root avoids sol ( (dom', dom) :: (codom, codom') :: xs )
+        end
+      | Tensor (l, r), Tensor (l', r') ->
+        st_unify root avoids solution ( (l, l') :: (r, r') :: xs )
+      | Quant (q, k, body), Quant (q', k', body') when q = q' && k = k' -> begin match k with
+          | KSens ->
+            let n = root <+ "SENS_ST_UNIFY" in
+            let free = Sensitivity.Free n in
+            let wl' = (instantiate_sens free body, instantiate_sens free body') :: xs in
+              st_unify n (n :: avoids) solution wl'
+          | KType ->
+            let n = root <+ "DT_ST_UNIFY" in
+            let free = Free n in
+            let wl' = (instantiate free body, instantiate free body') :: xs in
+              st_unify n (n :: avoids) solution wl'
+        end
+      | Precise p, Precise p' -> begin match p, p' with
+          | N s, N s' -> begin match (s == s') $> solution with
+              | None -> None
+              | Some sol -> st_unify root avoids sol xs
             end
+          | R s, R s' -> begin match (s == s') $> solution with
+              | None -> None
+              | Some sol -> st_unify root avoids sol xs
+            end
+          | _ -> None
+        end
+      | Bounded b, Bounded b' -> begin match b, b' with
+          | BR s, BR s' -> begin match (s == s') $> solution with
+              | None -> None
+              | Some sol -> st_unify root avoids sol xs
           end
-        | MSet l, MSet r -> st_unify root avoids solution ((l, r) :: xs)
-        | _ -> None
+        end
+      | MSet l, MSet r -> st_unify root avoids solution ((l, r) :: xs)
+      | _ -> None
 
 let subtype_unify (root : Name.t) (left : Dtype.t) (right : Dtype.t) : Util.t option =
   st_unify root [] (top, Sub.empty) [(left, right)]

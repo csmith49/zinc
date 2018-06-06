@@ -1,0 +1,39 @@
+timeout: 120
+command: "../zinc"
+arguments:
+  - flag: disable
+  - flag: count
+  - flag: v
+    values:
+      - 0
+  - flag: bm
+    values:
+      - adult_05
+      - adult_07
+      - compas_04
+      - compas_06
+      - performance_03
+      - performance_07
+      - student_03
+      - student_06
+  - flag: weights
+    values:
+      - 1 0 0 0
+      - 0 1 0 0
+      - 0 0 1 0
+      - 0 0 0 1
+      - 1 1 0 0
+      - 1 0 1 0
+      - 1 0 0 1
+      - 0 1 1 0
+      - 0 1 0 1
+      - 0 0 1 1
+      - 1 1 1 0
+      - 1 1 0 1
+      - 1 0 1 1
+      - 1 1 1 1
+      - 3 0 1 -1
+      - 1 0 10 0
+filters:
+  - id: count
+    prefix: "Solutions explored: "
