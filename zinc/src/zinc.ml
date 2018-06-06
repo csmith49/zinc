@@ -14,10 +14,10 @@ let counting = ref false
 let sizing = ref false
 
 (* the references for the weights, a little overly verbose *)
-let p_weight_1 = ref 1
+let p_weight_1 = ref 3
 let p_weight_2 = ref 0
-let p_weight_3 = ref 10
-let p_weight_4 = ref 0
+let p_weight_3 = ref 1
+let p_weight_4 = ref (-1)
 
 (* the actual command line arguments *)
 let spec_list = [
