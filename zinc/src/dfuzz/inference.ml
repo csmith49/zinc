@@ -59,9 +59,9 @@ module Sub = struct
       sub
       dt
   let avoids_pair (k : Name.t) (v : Dtype.t) (ns : Name.t list) : bool =
-    if CCList.mem k ns then
+    if CCList.mem ~eq:(=) k ns then
       false
-    else CCList.is_empty (CCList.inter ns (Dtype.free_vars v))
+    else CCList.is_empty (CCList.inter ~eq:(=) ns (Dtype.free_vars v))
   let avoids (sub : t) (ns : Name.t list) : bool =
     NameMap.for_all (fun k -> fun v -> avoids_pair k v ns) sub
 
@@ -237,7 +237,7 @@ let st_un (root : Name.t) (wl : Util.wlist) : Util.t option =
                 | None -> None
                 | Some sol -> st_unify root avoids sol xs
               end
-            | M (s, dt), M (s', dt') -> begin match (s == s') $> solution with
+            | M (s, dt), M (s', dt') -> begin match (s <= s') $> solution with
                 | None -> None
                 | Some sol -> st_unify root avoids sol ( (dt, dt') :: xs )
               end
