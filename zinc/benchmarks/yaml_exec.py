@@ -3,7 +3,9 @@ from ruamel.yaml import YAML
 import subprocess
 import time
 import itertools
-    
+import os
+import signal
+
 def split_output(lines, prefixes):
     output = []
     for _, prefix in prefixes:
@@ -13,17 +15,19 @@ def split_output(lines, prefixes):
 
 # this function forms the core of the operation
 def time_it(cmd, timeout, prefixes):
-    try:
-        start_time = time.time()
-        output_lines = subprocess.run(" ".join(cmd), 
-            shell=True, 
-            timeout=timeout, 
-            stdout=subprocess.PIPE,
-            universal_newlines=True).stdout.split("\n")
-        t = time.time() - start_time
-        return t, split_output(output_lines, prefixes)
-    except subprocess.TimeoutExpired as e:
-        return timeout, []
+    with subprocess.Popen(" ".join(cmd),
+        shell=True,
+        stdout=subprocess.PIPE,
+        universal_newlines=True,
+        preexec_fn=os.setsid) as proc:
+        try:
+            start_time = time.time()
+            output_lines = proc.communicate(timeout=timeout)[0].split("\n")
+            t = time.time() - start_time
+            return t, split_output(output_lines, prefixes)
+        except subprocess.TimeoutExpired as e:
+            os.killpg(proc.pid, signal.SIGINT)
+            return timeout, []
 
 # given a benchmark, we need to be able to extract all the commands to run and time
 def extract_commands(bm):
@@ -32,10 +36,15 @@ def extract_commands(bm):
     # but we'll also maintain a list of indices/keys for when we make a choice
     choices = []
     # so loop, keeping track of the index a thing gets put into prod
-    for cmd in bm["arguments"]:
+    try:
+        arguments = bm["arguments"]
+    except:
+        arguments = []
+    for cmd in arguments:
         # check to see if its a param
         if "parameter" in cmd.keys():
-            prod.append([cmd["parameter"]])
+            param = cmd["parameter"]
+            prod.append([str(param)])
         # check to see if it's a flag
         if "flag" in cmd.keys():
             flag = cmd["flag"]
