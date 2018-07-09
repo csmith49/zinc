@@ -10,7 +10,7 @@ let config = [
 (* alias to simplify some type expressions *)
 type expr = Expr.expr
 
-(* what arguments might we put here? *)
+(* no arguments needed here *)
 let context = mk_context config
 
 (* some arguments - like the rational values - must be bounded *)
@@ -127,50 +127,4 @@ module Fancy = struct
   let to_expr_list : t -> expr list = function
     | [] -> [Make.b_false]
     | (_ as srs) -> CCList.map expr_of_sens_rel srs
-end
-
-(* this is broken - turns out infinity is higher than 128 *)
-module Basic = struct
-  type t = Sensitivity.Relation.t list
-
-  (* conversion from constraints *)
-  let of_constraint : Constraint.t -> t = Constraint.flatten
-
-  (* we convert each expression independently *)
-  let rec expr_of_sens : Sensitivity.t -> expr = function
-    | Sensitivity.Free n -> Make.rational_variable n
-    | Sensitivity.Const c -> Make.rational c
-    | Sensitivity.Plus (l, r) -> Make.plus (expr_of_sens l) (expr_of_sens r)
-    | Sensitivity.Mult (l, r) -> Make.mult (expr_of_sens l) (expr_of_sens r)
-    | Sensitivity.Zero -> Make.rational RationalConstants.zero
-    | Sensitivity.Succ s -> Make.plus (expr_of_sens s) (Make.rational RationalConstants.one)
-    | Sensitivity.Bound i -> failwith "can't convert a bound variable to a z3 formula"
-
-  (* lift to constraining relations *)
-  let expr_of_sens_rel : Sensitivity.Relation.t -> expr = function
-    | Sensitivity.Relation.Eq (l, r) -> Make.eq (expr_of_sens l) (expr_of_sens r)
-    | Sensitivity.Relation.LEq (l, r) -> Make.leq (expr_of_sens l) (expr_of_sens r)
-
-  (* but we also constrain any variables that we have *)
-  let constrain_variable : Name.t -> expr = fun n ->
-    let x = Make.rational_variable n in
-    let zero = Make.rational RationalConstants.zero in
-    let infinity = Make.rational RationalConstants.infinity in
-      Make.conjoin (Make.leq x infinity) (Make.leq zero x)
-
-  (* lift free var computation to relations *)
-  let variables : Sensitivity.Relation.t -> Name.t list = function
-    | Sensitivity.Relation.Eq (l, r) -> (Sensitivity.free_vars l) @ (Sensitivity.free_vars r)
-    | Sensitivity.Relation.LEq (l, r) -> (Sensitivity.free_vars l) @ (Sensitivity.free_vars r)
-
-  (* we find all variables so we can constrain appropriately *)
-  let variables : t -> Name.t list = CCList.flat_map variables
-
-  (* the final conversion *)
-  let to_expr_list : t -> expr list = function
-    | [] -> [Make.b_false]
-    | (_ as srs) ->
-      let var_constraints = CCList.map constrain_variable (variables srs) in
-      let sens_constraints = CCList.map expr_of_sens_rel srs in
-      var_constraints @ sens_constraints
 end

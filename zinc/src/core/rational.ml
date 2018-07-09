@@ -3,7 +3,7 @@ type t =
     | Infinity
     | Q of int * int
 
-(* comparison probably doesn't need to be done, but we'll do it anyways *)
+(* comparison extended to deal with positive infinity *)
 let compare (a : t) (b : t) : int = match a, b with
     | Infinity, Infinity -> 0
     | Infinity, _ -> 1
@@ -27,11 +27,11 @@ let mult (a : t) (b : t) : t = match a, b with
     | _, Infinity -> Infinity
     | Q (x, y), Q (n, d) -> Q (x * n, y * d)
 
-(* some simple utility functions for helping out *)
+(* wrapper around general gcd computation - extra case helps with reduce *)
 let rec gcd (x : int) (y : int) : int =
   if y == 0 then x else gcd y (x mod y)
 
-(* we _might_ want to reduce down to a simpler form every once in a while *)
+(* reduces a fraction by doing cancellations when possible *)
 let reduce : t -> t = function
   | Infinity -> Infinity
   | Q (n, d) -> if d == 0 then Infinity else

@@ -1,4 +1,4 @@
-(* we effectively have heirarchical names, but they're folded up using hash functions *)
+(* we effectively maintain heirarchical names, but they're folded up using hash functions *)
 type t = N of string * int
 
 (* some simple constructors and printers *)
@@ -7,7 +7,6 @@ let to_string : t -> string = function
   N (s, i) -> s ^ (if i = 0 then "" else ":" ^ (string_of_int i))
 
 (* comparison is straightforward - by index, then name *)
-(* no clue if the order actually matters *)
 let compare (l : t) (r : t) : int = match l, r with
   | N (s, i), N (t, j) ->
     let ans = CCInt.compare i j in match ans with
@@ -15,16 +14,14 @@ let compare (l : t) (r : t) : int = match l, r with
       | _ -> ans
 
 (* hashing *)
-(* let hash : t -> int = function
-  | N (s, i) -> (CCHash.poly s) lxor (CCInt.hash i) *)
 let hash : t -> int = CCHash.poly
 
-(* the thing that makes heirarchical names work *)
+(* extending the heirarchy by various primitives *)
 let extend (n : t) (s : string) : t = N (s, hash n)
 let extend_by_name (l : t) (r : t) : t = match l, r with
   | _, N (t, j) -> N (t, (hash l) lxor (CCInt.hash j))
 
-(* the alternate structure makes them more bearable to work with *)
+(* alternate constructors *)
 module Alt = struct
   let ( <+ ) : t -> string -> t = extend
   let ( ++ ) : t -> t -> t = extend_by_name

@@ -1,6 +1,7 @@
 open Benchmark
 
 (* ADULTS *)
+(* Schema: *)
 (* ["gt_50k"; "gender"; "race"; "work_hours"; "education_level"; "profession"; "work_class"; "capital_gains"] *)
 
 let adult_sig = Signature.Adult.signature @ Signature.MapReduce.signature @ Signature.Aggregate.signature

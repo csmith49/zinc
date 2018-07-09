@@ -30,7 +30,7 @@ let rec row_of_list : (string * t) list -> t = function
     | Row row -> Row (StringMap.add s v row)
     | _ -> failwith "shouldn't happen"
 
-(* we need comparisons *)
+(* comparisons *)
 let rec compare (l : t) (r : t) : int = match l, r with
   | Real l, Real r -> Pervasives.compare l r
   | Bag ls, Bag rs -> Pervasives.compare (CCList.sort compare ls) (CCList.sort compare rs)

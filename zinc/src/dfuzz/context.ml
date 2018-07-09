@@ -28,7 +28,7 @@ module EModal = struct
   let empty = S (Sensitivity.Const (Rational.Q (0, 1)), Top)
   let of_dtype (dt : Dtype.t) : t = S (Sensitivity.Const (Rational.Q (1, 1)), Concrete dt)
   let of_name (n : Name.t) : t = S (Sensitivity.Free n, Top)
-  (* alternative syntax, for later *)
+  (* alternative syntax *)
   module Alt = struct
     let ( =? ) (l : edtype) (r : edtype) : edtype = glb l r
     let ( *? ) (s : Sensitivity.t) (r : t) : t = mult s r
@@ -36,7 +36,7 @@ module EModal = struct
     let zero = empty
     let e (n : Name.t) : t = of_name n
   end
-  (* sometimes we'll need to print these *)
+  (* printing *)
   let rec to_string : t -> string = function
     | S (s, edt) -> match edt with
       | Concrete dt -> "![" ^ (Sensitivity.to_string s) ^ "] " ^ (Dtype.to_string dt)
@@ -56,7 +56,7 @@ open EModal.Alt
 let concrete_of_var (n : Name.t) (dt : Dtype.t) : t =
   Concrete (n, EModal.S (Sensitivity.Const (Rational.of_int 1), EModal.Concrete dt))
 
-(* what names are actually bound in here? *)
+(* computes names that are bound in t *)
 let rec support : t -> Name.t list = function
   | Concrete (n, em) -> [n]
   | Symbolic _ -> []
@@ -72,7 +72,7 @@ let rec extract_type (n : Name.t) (c : t) : EModal.t = match c with
   | Times (s, c') -> s *? (extract_type n c')
   | Empty -> zero
 
-(* sure, this is just a simple composition, but still *)
+(* pull the sensitivity from a modal type *)
 let extract_sensitivity (n : Name.t) (c : t) : Sensitivity.t = EModal.to_sensitivity (extract_type n c)
 
 (* printing *)
@@ -92,7 +92,7 @@ let rec to_string : t -> string = function
   s' ^ " * " ^ c'
 | Empty -> "∅"
 
-(* so that we can keep things straight *)
+(* alias for submodules *)
 type context = t
 
 module Relation = struct
@@ -108,7 +108,7 @@ module Relation = struct
     | Eq (l, r) -> (support l) @ (support r)
 end
 
-(* because we love that alternative syntax *)
+(* alternative syntax *)
 module Alt = struct
   let (<$) (n : Name.t) (c : t) : Sensitivity.t = extract_sensitivity n c
   let vars : Relation.t -> Name.t list = Relation.support

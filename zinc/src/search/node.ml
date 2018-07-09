@@ -19,7 +19,7 @@ type t = {
   solution : Fterm.t;
 }
 
-(* mostly just for testing *)
+(* for testing purposes we want to print these *)
 let to_string (n : t) : string = Fterm.to_string n.solution
 
 module Priority = struct
@@ -40,15 +40,14 @@ module Priority = struct
 end
 
 let to_vector : t -> Vector.t = fun n ->
-let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in
-(* let c = n.obligation |> Constraint.flatten in *)
-let sensitivities = Simplify.extract_sensitivities (c) in  
-  {
-    Vector.size = Fterm.size n.solution;
-    constant = CCList.length (CCList.filter Simplify.is_constant sensitivities);
-    unconstrained = CCList.length (CCList.filter Simplify.is_unconstrained sensitivities);
-    infinity = CCList.length (CCList.filter Simplify.is_infinity sensitivities);
-  }
+  let c = n.obligation |> Constraint.flatten |> Simplify.assignment_simplify in
+  let sensitivities = Simplify.extract_sensitivities (c) in  
+    {
+      Vector.size = Fterm.size n.solution;
+      constant = CCList.length (CCList.filter Simplify.is_constant sensitivities);
+      unconstrained = CCList.length (CCList.filter Simplify.is_unconstrained sensitivities);
+      infinity = CCList.length (CCList.filter Simplify.is_infinity sensitivities);
+    }
 
 let of_priority : Priority.t -> t = fun p ->
   {

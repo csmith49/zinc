@@ -29,7 +29,7 @@ let rec separate_assignments (c : t) : (const_assignment list * t) = match c wit
       | None -> cal', c :: c'
       | Some ca -> ca :: cal', c'
 
-(* weird fixpoint stuff *)
+(* fixpoint helpers *)
 let fixpoint (f : 'a -> 'a) : 'a -> 'a = 
   let rec g = fun a ->
     let step = f a in if a = step then a else g (step)
@@ -38,7 +38,7 @@ let fixpoint (f : 'a -> 'a) : 'a -> 'a =
 let rec bounded_fixpoint (n : int) (f : 'a -> 'a) : 'a -> 'a =
   fun a -> let step = f a in if n = 0 || step = a then step else bounded_fixpoint (n - 1) f step
 
-(* now simplification *)
+(* simplification *)
 let one_step_assignment_simplify : t -> t = fun c ->
   let cal, c = separate_assignments c in CCList.sort compare (apply_assignments c cal)
 let assignment_simplify : t -> t = bounded_fixpoint 30 one_step_assignment_simplify
@@ -72,14 +72,14 @@ let rec reduce_sensitivity : Sensitivity.t -> Sensitivity.t = function
 
 let reduce_simplify : t -> t = fixpoint (fun rs -> CCList.map (Sensitivity.Relation.fmap reduce_sensitivity) rs)
 
-(* we can remove identity statememnts *)
+(* we can remove identity statements *)
 let is_identity : rel -> bool = function
   | Sensitivity.Relation.Eq (l, r) when l = r -> true
   | Sensitivity.Relation.LEq (l, r) when l = r -> true
   | _ -> false
 let identity_simplify : t -> t = CCList.filter (fun n -> n |> is_identity |> not)
 
-(* and we can also just remap variables whenever *)
+(* we can remap variables whenever *)
 type link = Name.t * Name.t
 
 let apply_link (c : t) (l : link) : t =
@@ -101,7 +101,7 @@ let link_simplify : t -> t = fixpoint one_step_link_simplify
 open CCFun
 let simplify : t -> t = fixpoint (reduce_simplify % assignment_simplify % link_simplify % identity_simplify)
 
-(* we also have some simple ways of extracting what were once sensitivities *)
+(* extract what was once a sensitivity *)
 let extract_sensitivity : rel -> Sensitivity.t option = fun sr ->
   match Sensitivity.Relation.rhs sr with
     | Sensitivity.Plus (_, Sensitivity.Mult (s, _)) -> begin match s with

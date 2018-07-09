@@ -5,7 +5,6 @@ let student_sig = Signature.Student.signature @ Signature.MapReduce.signature @ 
 
 
 (* number of students paying for extra classes with a moderate amount of weekday alcohol consumption *)
-(* \x.count(filter(paying, filter(\y.moderate(wkdy(y))), x)) *)
 let student_01 = {
   name = "student_01";
   mechanism = Laplace;
@@ -37,8 +36,6 @@ let student_02 = {
 }
 
 (* average weekend alcohol consumption per address type *)
-(* λx:712711699.λy:712711699.group_map (group_map (partition (x:712711699) (address_type) (y:712711699)) (map (λz:712711699.wknd_to_val (weekend_consumption (z:712711699))))) (average) *)
-
 let student_03 = {
   name = "student_03";
   mechanism = Partition (
@@ -59,7 +56,6 @@ let student_03 = {
 }
 
 (* family relationship status resulting in the highest average final grade *)
-(* \x.\y. avg(map(grade_to_val, filter(\z.family_is(z, y), x))) *)
 let student_04 = {
   name = "student_04";
   mechanism = Exponential (

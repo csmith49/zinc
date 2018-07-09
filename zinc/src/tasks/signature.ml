@@ -1,6 +1,6 @@
 open Make
 
-(* we have some utility functions for treating values a little more cleanly *)
+(* utility functions for treating values more cleanly *)
 let binarize (f : Value.abstraction) = fun x -> fun y -> match (f x) with
   | Value.F f' -> f' y
   | _ -> failwith "can't binarize"
@@ -65,7 +65,7 @@ module MapReduce = struct
     Primitive.name = "filter";
     Primitive.dtype = 
       tbind (a, sbind (n,
-        modal (n, a => bool) -* (modal (one, mset (a, n)) -* mset (a, infinity))
+        modal (n, a => bool) -* (modal (one, mset (a, n)) -* mset (a, n))
       ));
     Primitive.source = Value.F (fun v -> match v with
       | Value.F p -> Value.F (fun v -> match v with
@@ -77,7 +77,6 @@ module MapReduce = struct
   let map = {
     Primitive.name = "map";
     Primitive.dtype =
-      (* is this actually the right type? what's the sensitivity on the mset input? *)
       tbind (a, tbind (b, sbind (s, sbind (n, 
         modal (n, modal (s, a) -* b) -* (modal (one, mset (a, n)) -* mset (b, n))
       ))));
@@ -87,23 +86,6 @@ module MapReduce = struct
         | _ -> failwith "can't apply map to a non-bag")
       | _ -> failwith "can't apply a non-function mapper");
   }
-
-  (* let reduce = {
-    Primitive.name = "reduce";
-    Primitive.dtype = 
-      sbind (s, sbind (n, sbind (k,
-        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded k, n)) -* real)
-      )));
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.F f -> Value.F (fun v -> match v with
-        | Value.Bag ts -> begin match ts with
-          | [] -> Value.Real 0.0
-          | _ -> CCList.fold_left (binarize f) (Value.Real 0.0) ts
-        end
-        | _ -> failwith "can't apply reduce to a non-bag")
-      | _ -> failwith "can't apply a non-function reducer"
-    );
-  } *)
 
   let signature = [filter; map]
 end

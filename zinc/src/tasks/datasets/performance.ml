@@ -32,7 +32,6 @@ let performance_01 = {
 }
 
 (* performance level with the highest average participation *)
-(* λx.λy.average (map (λz.part_to_val (participation (z))) (filter (λx'.is_bracket (level_to_val (level (x'))) (y)) (x))) *)
 let performance_02 = {
   name = "performance_02";
   mechanism = Exponential (
@@ -104,7 +103,6 @@ let performance_04 = {
 }
 
 (* average grade in the low performance bracket *)
-(* λx.average (filter (λy.is_low (to_bracket (y))) (map (λz.level_to_val (level (z))) (x))) *)
 let performance_05 = {
   name = "performance_05";
   mechanism = Laplace;
@@ -175,6 +173,5 @@ let performance_07 = {
     ]);
   ]
 }
-
 
 let all = [performance_01; performance_02; performance_03; performance_04; performance_05; performance_06; performance_07]

@@ -1,3 +1,5 @@
+(* much of the structure of this file is a modificationo f ../core/fterm.ml -- see there for more *)
+
 (* base type *)
 type t =
   | Free of Name.t
@@ -169,7 +171,7 @@ let rec free_vars : t -> Name.t list = function
     end
   | _ -> []
 
-(* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)
+(* alternative syntax makes it easier to write these types in the benchmarks *)
 module Alt = struct
   (* non-sensitive function application *)
   let (=>) (d : t) (cd : t) : t =

@@ -6,13 +6,13 @@ type t = {
   goal : Dtype.t;
 }
 
-(* utility syntax stuff *)
+(* utility syntax *)
 open Name.Alt
 open Fterm.Prefix.Alt
 open Context.Alt
 open Constraint.Alt
 
-(* nodes can be instantiated into several subproblems, we just pick the first bound *)
+(* nodes can be instantiated into several subproblems - we pick the first bound *)
 let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
   | Fterm.Wild (context, dom, body) ->
     let w = root <+ "w" in
@@ -48,7 +48,7 @@ and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
       | _ -> None
     in CCList.filter_map f prefix
 
-(* and of course, if we want a function we can certainly make one *)
+(* if we want a function we can certainly make one *)
 let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
   | Dtype.Func (Dtype.Modal (s, dom), codom) ->
     let w = sp.root <+ "w" in

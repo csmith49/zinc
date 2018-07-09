@@ -4,10 +4,10 @@ type t =
   | Bound of int
   | Abs of Name.t * Dtype.t * scope
   | App of t * t
-  (* type level things *)
+  (* type level polymorphism *)
   | TyAbs of scope
   | TyApp of t * Dtype.t
-  (* sensitivity level things *)
+  (* sensitivity level polymorphism *)
   | SensAbs of scope
   | SensApp of t * Sensitivity.t
   (* but also the simple language extensions we'll use for synthesis and evalution *)
@@ -111,9 +111,9 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
 (* to reference types in submodules *)
 type fterm = t
 
-(* allows us to move across binders in zippers and whatnot *)
+(* allows us to move across binders in zippers *)
 module Prefix = struct
-  (* bindings contain all the information to recreate the og fterm *)
+  (* bindings contain all the information to recreate the original fterm *)
   type binding =
     | BAbs of Name.t * Dtype.t
     | BTyAbs of Name.t
@@ -121,7 +121,7 @@ module Prefix = struct
     | BWild of Name.t * Context.t * Dtype.t
   (* and prefixes maintain a list of bindings *)
   type t = binding list
-  (* I love me some alternative syntax *)
+  (* alternative syntax for ease of construction elsewhere *)
   module Alt = struct
     let (@>) (b : binding) (tm : fterm) : fterm = match b with
       | BAbs (tag, dom) -> Abs (tag, dom, abstract tag tm)
@@ -138,7 +138,7 @@ module Prefix = struct
       | _ -> None
   end
   open Alt
-  (* append the entirety of a prefix - not always useful *)
+  (* append the entirety of a prefix *)
   let rec bind (prefix : t) (tm : fterm) : fterm = match prefix with
     | [] -> tm
     | b :: prefix' -> bind prefix' (b @> tm)
@@ -153,7 +153,7 @@ module Zipper = struct
     | ZAppRight of fterm
     | ZTyApp of Dtype.t
     | ZSensApp of Sensitivity.t
-    (* this contains several derivatives put together - you'll see *)
+    (* this contains several derivatives put together *)
     | ZBinding
   (* we maintain a current view, the bindings needed, and the branches *)
   type t = fterm * Prefix.t * branch list

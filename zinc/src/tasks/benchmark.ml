@@ -29,8 +29,9 @@ let to_node : t -> Node.t = fun bm -> {
   Node.root = Name.of_string "start";
   obligation = begin
     let budget = Sensitivity.Const (Rational.of_int bm.budget) in
-    (* in reality, we should have lower_bound < k and lower_bound = 0 *)
-    (* but this works, if we assume all sensitivities are bounded below by 1 *)
+    (* we should have lower_bound < k and lower_bound = 0 *)
+    (* this works, if we assume all sensitivities are bounded below by 1 *)
+    (* which they are in our signature *)
     let lower_bound = Sensitivity.Const (Rational.of_int 1) in
     let open Constraint.Alt in
       (k <= budget) & (lower_bound <= k)
@@ -43,19 +44,19 @@ let to_node : t -> Node.t = fun bm -> {
   end;
 }
 
-(* starting verification stuff *)
-(* apply an fterm to a value to get a new value - only really works if tm is a function *)
+(* starting verification functions *)
+(* apply an fterm to a value to get a new value - only works if tm is a function *)
 let apply (tm : Fterm.t) (i : Value.t) : Value.t = Fterm.eval (Fterm.App (tm, Fterm.Const i))
 let apply_binary (tm : Fterm.t) (one : Value.t) (two : Value.t) =
   let curried = Fterm.App (tm, Fterm.Const one) in
     Fterm.eval (Fterm.App (curried, Fterm.Const two))
 
-(* just makes sure the inputs and outputs match up *)
+(* makes sure the inputs and outputs match up *)
 let verify_laplace (tm : Fterm.t) (io : (Value.t * Value.t) list) : bool =
   let check_pair = fun (i, o) -> o = (apply tm i)
   in CCList.for_all check_pair io
 
-(* the io examples are different in this case - they're the values in a that should score highest *)
+(* the io examples are different in this case - they're the values that should score highest *)
 let verify_exponential (tm : Fterm.t) (io : (Value.t * Value.t) list) (pop : Value.t list) : bool =
   let check_pair = fun (i, o) ->
     let score = apply_binary tm i o in

@@ -1,3 +1,4 @@
+(* possible substitutions *)
 type t = {
   solution : Fterm.t;
   dtype : Dtype.t;
