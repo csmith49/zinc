@@ -1,4 +1,4 @@
-(* primitives represent the functions we're actually synthesizing over *)
+(* primitives represent the functions we're synthesizing over *)
 type t = {
   name : string;
   dtype : Dtype.t;
@@ -16,7 +16,7 @@ let to_proposal : t -> Proposal.t = fun p -> {
 
 module Utility = struct
   open Make
-  (* we'll do a lot of projection over rows *)
+  (* we do a lot of projection over rows *)
   let projection (n : string) (dt : Dtype.t) : t = {
     name = n;
     dtype = row => dt;
