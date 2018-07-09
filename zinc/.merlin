@@ -1,4 +1,4 @@
 S src/**
 
-PKG containers Z3 containers.data
+PKG containers containers.data
 B _build/**
