@@ -1,122 +1,101 @@
-open Sensitivity.Alt
-open Name.Alt
+(* contexts maintain maps between type variables and sensitivities *)
+(* they DO NOT maintain type requirements - synthesis and explicit annotations handle that *)
 
-(* we define extended modal types to support failure *)
-module EModal = struct
-  (* step 1: define lattice w/ glb to add top type *)
-  type edtype =
-    | Concrete of Dtype.t
-    | Top
-  (* the only operator we care about in the lattice: glb *)
-  let glb (l : edtype) (r : edtype) : edtype = match l, r with
-    | Concrete l', Concrete r' ->
-      if l' = r' then l else failwith "types not equal"
-    | Top, _ -> r
-    | _, Top -> l
-  (* lift modal type constructor to edtypes *)
-  type t = S of Sensitivity.t * edtype
-  (* with the appropriate arithmetic operations lifted from sensitivities *)
-  let add (l : t) (r : t) : t = match l, r with
-    | S (ls, ledt), S (rs, redt) ->
-      S (ls +! rs, glb ledt redt )
-  let mult (s : Sensitivity.t) (r : t) : t = match r with
-    | S (s', edt) -> S (s *! s', edt)
-  (* a destructor *)
-  let to_sensitivity : t -> Sensitivity.t = function
-    | S (s, _) -> s
-  (* and a few constructors *)
-  let empty = S (Sensitivity.Const (Rational.Q (0, 1)), Top)
-  let of_dtype (dt : Dtype.t) : t = S (Sensitivity.Const (Rational.Q (1, 1)), Concrete dt)
-  let of_name (n : Name.t) : t = S (Sensitivity.Free n, Top)
-  (* alternative syntax, for later *)
-  module Alt = struct
-    let ( =? ) (l : edtype) (r : edtype) : edtype = glb l r
-    let ( *? ) (s : Sensitivity.t) (r : t) : t = mult s r
-    let ( +? ) (l : t) (r : t) : t = add l r
-    let zero = empty
-    let e (n : Name.t) : t = of_name n
-  end
-  (* sometimes we'll need to print these *)
-  let rec to_string : t -> string = function
-    | S (s, edt) -> match edt with
-      | Concrete dt -> "![" ^ (Sensitivity.to_string s) ^ "] " ^ (Dtype.to_string dt)
-      | Top -> "T"
-end
-
-(* contexts are represented symbolically as much as possible *)
 type t =
-  | Concrete of Name.t * EModal.t
+  | Concrete of Name.t * Sensitivity.t
   | Symbolic of Name.t
-  | Plus of t * t
-  | Times of Sensitivity.t * t
+  | Linear of t * Sensitivity.t * t
+  | Join of t * t
+  | Substitution of t * Sensitivity.Sub.t
   | Empty
 
-open EModal.Alt
+(* simplest construction creates concrete contexts from names (assuming usage 1) *)
+let concrete_of_var (n : Name.t) : t = Concrete (n, Sensitivity.Const (Rational.of_int 1))
 
-let concrete_of_var (n : Name.t) (dt : Dtype.t) : t =
-  Concrete (n, EModal.S (Sensitivity.Const (Rational.of_int 1), EModal.Concrete dt))
-
-(* what names are actually bound in here? *)
+(* find names concretely bound *)
 let rec support : t -> Name.t list = function
-  | Concrete (n, em) -> [n]
+  | Concrete (x, _) -> [x]
   | Symbolic _ -> []
-  | Plus (l, r) -> (support l) @ (support r)
-  | Times (_, context) -> support context
+  | Linear (l, _, r) -> (support l) @ (support r)
+  | Join (l, r) -> (support l) @ (support r)
+  | Substitution (c, _) -> support c
   | Empty -> []
 
-(* given a name, we need the type from the context *)
-let rec extract_type (n : Name.t) (c : t) : EModal.t = match c with
-  | Concrete (n', em) -> if n = n' then em else zero
-  | Symbolic n' -> e (n' ++ n)
-  | Plus (l, r) -> (extract_type n l) +? (extract_type n r)
-  | Times (s, c') -> s *? (extract_type n c')
-  | Empty -> zero
+(* makes the following arithmetic easier *)
+open Sensitivity.Alt
 
-(* sure, this is just a simple composition, but still *)
-let extract_sensitivity (n : Name.t) (c : t) : Sensitivity.t = EModal.to_sensitivity (extract_type n c)
+(* extract sensitivity expression for a given name *)
+let rec extract_sensitivity (n : Name.t) (c : t) : Sensitivity.t = match c with
+  | Concrete (x, s) -> if Name.eq x n then s else zero
+  | Symbolic x -> Sensitivity.Free (Name.extend_by_name x n)
+  | Linear (l, s, r) ->
+    let l' = extract_sensitivity n l in
+    let r' = extract_sensitivity n r in
+      l' +! (s *! r')
+  | Join (l, r) ->
+    let l' = extract_sensitivity n l in
+    let r' = extract_sensitivity n r in
+      l' +! r'
+  | Substitution (c, sub) ->
+    let s = extract_sensitivity n c in
+      Sensitivity.Sub.apply s sub
+  | Empty -> zero
 
 (* printing *)
 let rec to_string : t -> string = function
-| Concrete (n, em) ->
-  let n' = Name.to_string n in
-  let em' = EModal.to_string em in
-  "{" ^ n' ^ " : " ^ em' ^ "}"
-| Symbolic n -> Name.to_string n
-| Plus (l, r) ->
-  let l' = to_string l in
-  let r' = to_string r in
-  l' ^ " + " ^ r'
-| Times (s, c) ->
-  let s' = Sensitivity.to_string s in
-  let c' = to_string c in
-  s' ^ " * " ^ c'
-| Empty -> "∅"
+  | Concrete (x, s) ->
+    let x' = Name.to_string x in
+    let s' = Sensitivity.to_string s in
+      "{" ^ x' ^ " : " ^ s' ^ "}"
+  | Symbolic x -> Name.to_string x
+  | Linear (l, s, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    let s' = Sensitivity.to_string s in
+      l' ^ " + " ^ s' ^ " * " ^ r'
+  | Join (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+      l' ^ " # " ^ r'
+  | Substitution (c, sub) ->
+    let c' = to_string c in
+    let sub' = Sensitivity.Sub.to_string sub in
+      c' ^ sub'
+  | Empty -> "∅"
 
 (* so that we can keep things straight *)
 type context = t
 
 module Relation = struct
-  type t = Eq of context * context
+  type t = 
+    | Eq of context * context
+    | LEq of context * context
 
   let to_string : t -> string = function
     | Eq (l, r) ->
       let l' = to_string l in
       let r' = to_string r in
-        l' ^ " = " ^ r'
+        l' ^ " == " ^ r'
+    | LEq (l, r) ->
+      let l' = to_string l in
+      let r' = to_string r in
+        l' ^ " <= " ^ r'
   
   let support : t -> Name.t list = function
     | Eq (l, r) -> (support l) @ (support r)
+    | LEq (l, r) -> (support l) @ (support r)
 end
 
 (* because we love that alternative syntax *)
 module Alt = struct
   let (<$) (n : Name.t) (c : t) : Sensitivity.t = extract_sensitivity n c
   let vars : Relation.t -> Name.t list = Relation.support
-  let (=$) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
 
   (* construction *)
-  let ( =. ) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
-  let ( *. ) (l : Sensitivity.t) (r : t) : t = Times (l, r)
-  let ( +. ) (l : t) (r : t) : t = Plus (l, r)
-  let concrete (n : Name.t) (s : Sensitivity.t) (dt : Dtype.t) = Concrete (n, EModal.S (s, EModal.Concrete dt))
+  let ( ==. ) (l : t) (r : t) : Relation.t = Relation.Eq (l, r)
+  let ( <=. ) (l : t) (r : t) : Relation.t = Relation.LEq (l, r)
+
+  let ( +. ) (l : t) (r : t) : context = Linear (l, one, r)
+  let ( *. ) (s : Sensitivity.t) (r : t) : context = Linear (Empty, s, r)
+  (* let concrete (n : Name.t) (s : Sensitivity.t) (dt : Dtype.t) = Concrete (n, EModal.S (s, EModal.Concrete dt)) *)
 end

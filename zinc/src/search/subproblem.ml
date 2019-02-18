@@ -38,7 +38,7 @@ let rec variable_proposals (sp : t) : Proposal.t list =
       Proposal.solution = Fterm.Free n;
       Proposal.dtype = dt;
       Proposal.wildcards = [];
-      Proposal.context = Context.concrete_of_var n dt;
+      Proposal.context = Context.concrete_of_var n;
       Proposal.obligation = Constraint.Top;
     } in CCList.map f (variables sp)
 and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
@@ -60,7 +60,7 @@ let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
       Proposal.dtype = sp.goal;
       Proposal.wildcards = wild_bindings;
       Proposal.context = context;
-      Proposal.obligation = c_rel (context =. (sp.context +. (concrete tag s dom)));
+      Proposal.obligation = c_rel (context ==. (sp.context +. (Context.Concrete (tag, s) )));
     }
   | _ -> None
 
@@ -99,7 +99,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
         Proposal.wildcards = binding :: prop.Proposal.wildcards;
         Proposal.context = c;
         Proposal.obligation = 
-          prop.Proposal.obligation & c_rel (c =. (prop.Proposal.context +. (s *. c_wild)));
+          prop.Proposal.obligation & c_rel (c ==. (Context.Linear (prop.Proposal.context, s, c_wild)));
       } in specialize root p context
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
       let root = root <+ "step_tyabs" in
@@ -111,7 +111,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
         Proposal.dtype = Dtype.instantiate (Dtype.Free a) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;
-        Proposal.obligation = c_rel (c =. prop.Proposal.context);
+        Proposal.obligation = c_rel (c ==. prop.Proposal.context);
       } in specialize root p context
     | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KSens ->
       let root = root <+ "step_sensabs" in
@@ -123,7 +123,9 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
         Proposal.dtype = Dtype.instantiate_sens (Sensitivity.Free s) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;
-        Proposal.obligation = c_rel (c =. prop.Proposal.context);
+        Proposal.obligation = c_rel (c ==. prop.Proposal.context);
       } in specialize root p context
     | _ -> []
-  in {prop with Proposal.obligation = prop.Proposal.obligation & (c_rel (context =. prop.Proposal.context));} :: recurse
+  in {prop with 
+    Proposal.obligation = prop.Proposal.obligation & (c_rel (context ==. prop.Proposal.context));
+  } :: recurse

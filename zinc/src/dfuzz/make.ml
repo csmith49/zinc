@@ -16,7 +16,7 @@ let one : Sensitivity.t = Sensitivity.Const (Rational.of_int 1)
 let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 
 (* and type constanst *)
-let real : Dtype.t = Dtype.Precise (Dtype.R (Sensitivity.Const (Rational.Infinity)))
+let real : Dtype.t = Dtype.Precise (Dtype.Real (Sensitivity.Const (Rational.Infinity)))
 let bool : Dtype.t = Dtype.Base "bool"
 let int : Dtype.t = Dtype.Base "int"
 let row : Dtype.t = Dtype.Base "row"
@@ -24,13 +24,13 @@ let row : Dtype.t = Dtype.Base "row"
 let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 
 (* precise type constructors *)
-let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.R s)
-let p_int (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.N s)
-let mset (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.M (snd p, fst p))
+let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.Real s)
+let p_int (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.Natural s)
+let mset (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.MSet (snd p, fst p))
 
 (* and bounded type constructors *)
-let bounded (s : Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.BR s)
-let bounded_by (s : int) : Dtype.t = Dtype.Bounded (Dtype.BR (Sensitivity.Const (Rational.of_int s)))
+let bounded (s : Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.Interval s)
+let bounded_by (s : int) : Dtype.t = Dtype.Bounded (Dtype.Interval (Sensitivity.Const (Rational.of_int s)))
 
 (* the modal constructor *)
 let modal (p : Sensitivity.t * Dtype.t) : Dtype.modal = Dtype.Modal (fst p, snd p)
@@ -41,6 +41,9 @@ let ( -* ) (dom : Dtype.modal) (codom : Dtype.t) : Dtype.t = Dtype.Func (dom, co
 
 (* the pair constructor *)
 let pair (p : Dtype.t * Dtype.t) : Dtype.t = Dtype.Tensor (fst p, snd p)
+
+(* monad constructor *)
+let prob (p : Dtype.t) = Dtype.Monad p
 
 (* quantifiers *)
 let tbind (p : Dtype.t * Dtype.t) : Dtype.t = match fst p with

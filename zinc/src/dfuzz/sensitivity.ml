@@ -39,9 +39,26 @@ module Alt = struct
   let ( +! ) (l : t) (r : t) : t = Plus (l, r)
   let ( *! ) (l : t) (r : t) : t = Mult (l, r)
   (* constants *)
-  let z = Zero
+  let zero = Const (Rational.of_int 0)
+  let one = Const (Rational.of_int 1)
   let s (n : string) : t = Free (Name.of_string n)
 end
+
+(* printing *)
+let rec to_string : t -> string = function
+  | Free n -> Name.to_string n
+  | Bound i -> "BOUND: " ^ (string_of_int i)
+  | Const q -> Rational.to_string q
+  | Plus (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    l' ^ " + " ^ r'
+  | Mult (l, r) ->
+    let l' = to_string l in
+    let r' = to_string r in
+    l' ^ " * " ^ r'
+  | Zero -> "0"
+  | Succ s -> (to_string s) ^ " + 1"
 
 (* and utilities for substituting outside the context of binders *)
 type sens = t
@@ -62,23 +79,16 @@ module Sub = struct
   let add : Name.t -> sens -> t -> t = NameMap.add
 
   let of_list : (Name.t * sens) list -> t = NameMap.of_list
+
+  let to_string (sub : t) : string =
+    let f = fun (k, v) -> (Name.to_string k) ^ "/" ^ (to_string v) in
+    let sub' = sub
+      |> NameMap.to_list
+      |> CCList.map f
+      |> CCString.concat ", "
+    in "[" ^ sub' ^ "]"
 end
 
-(* printing *)
-let rec to_string : t -> string = function
-  | Free n -> Name.to_string n
-  | Bound i -> "BOUND: " ^ (string_of_int i)
-  | Const q -> Rational.to_string q
-  | Plus (l, r) ->
-    let l' = to_string l in
-    let r' = to_string r in
-    l' ^ " + " ^ r'
-  | Mult (l, r) ->
-    let l' = to_string l in
-    let r' = to_string r in
-    l' ^ " * " ^ r'
-  | Zero -> "0"
-  | Succ s -> (to_string s) ^ " + 1"
 
 module Relation = struct
   type t =

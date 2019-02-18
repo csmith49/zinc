@@ -8,10 +8,11 @@ type t =
   | Tensor of t * t
   | Base of base
   | Bounded of bounded
+  | Monad of t
 and precise =
-  | N of Sensitivity.t
-  | M of Sensitivity.t * t
-  | R of Sensitivity.t
+  | Natural of Sensitivity.t
+  | Real of Sensitivity.t
+  | List of Sensitivity.t * t
 and quantifier =
   | Exists
   | ForAll
@@ -22,16 +23,17 @@ and scope = Sc of t
 and modal = Modal of Sensitivity.t * t
 and base = string
 and bounded =
-  | BR of Sensitivity.t
+  | Interval of Sensitivity.t
+  | MSet of Sensitivity.t * t
 
 (* mcbride and mckinna *)
 let rec abstract (n : Name.t) (dt : t) : scope = Sc (abstract' n 0 dt)
 and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
   | Free n' -> if n = n' then (Bound db) else dt
   | Precise p -> begin match p with
-      | N s -> Precise (N (Sensitivity.abstract' n db s))
-      | M (s, dt') -> Precise (M (Sensitivity.abstract' n db s, abstract' n db dt'))
-      | R s -> Precise (R (Sensitivity.abstract' n db s))
+      | Natural s -> Precise (Natural (Sensitivity.abstract' n db s))
+      | List (s, dt') -> Precise (List (Sensitivity.abstract' n db s, abstract' n db dt'))
+      | Real s -> Precise (Real (Sensitivity.abstract' n db s))
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (abstract' n (db + 1) body))
   | Func (m, codom) -> begin match m with
@@ -39,8 +41,10 @@ and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
     end
   | Tensor (l, r) -> Tensor (abstract' n db l, abstract' n db r)
   | Bounded b -> begin match b with
-      | BR s -> Bounded (BR (Sensitivity.abstract' n db s))
+      | Interval s -> Bounded (Interval (Sensitivity.abstract' n db s))
+      | MSet (s, dt') -> Bounded (MSet (Sensitivity.abstract' n db s, abstract' n db dt'))
     end
+  | Monad dt -> Monad (abstract' n db dt)
   | _ -> dt (* catches Base and Bound case *)
 
 let rec instantiate (img : t) (s : scope) : t = match s with
@@ -48,23 +52,28 @@ let rec instantiate (img : t) (s : scope) : t = match s with
 and instantiate' (img : t) (db : int) (dt : t) : t = match dt with
   | Bound i -> if i = db then img else dt
   | Precise p -> begin match p with
-      | M (s, dt') -> Precise (M (s, instantiate' img db dt'))
+      | List (s, dt') -> Precise (List (s, instantiate' img db dt'))
       | _ -> Precise p
+    end
+  | Bounded p -> begin match p with
+      | MSet (s, dt') -> Bounded (MSet (s, instantiate' img db dt'))
+      | _ -> Bounded p
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate' img (db + 1) body))
   | Func (m, codom) -> begin match m with
       | Modal (s, dom) -> Func (Modal (s, instantiate' img db dom), instantiate' img db codom)
     end
   | Tensor (l, r) -> Tensor (instantiate' img db l, instantiate' img db r)
+  | Monad dt -> Monad (instantiate' img db dt)
   | _ -> dt
 
 let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
   | Sc body -> instantiate_sens' img 0 body
 and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt with
   | Precise p -> begin match p with
-      | N s -> Precise (N (Sensitivity.instantiate' img db s))
-      | M (s, dt') -> Precise (M (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
-      | R s -> Precise (R (Sensitivity.instantiate' img db s))
+      | Natural s -> Precise (Natural (Sensitivity.instantiate' img db s))
+      | List (s, dt') -> Precise (List (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
+      | Real s -> Precise (Real (Sensitivity.instantiate' img db s))
     end
   | Quant (q, k, Sc body) -> Quant (q, k, Sc (instantiate_sens' img (db + 1) body))
   | Func (m, codom) -> begin match m with
@@ -75,8 +84,10 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt w
     end
   | Tensor (l, r) -> Tensor (instantiate_sens' img db l, instantiate_sens' img db r)
   | Bounded b -> begin match b with
-      | BR s -> Bounded (BR (Sensitivity.instantiate' img db s))
+      | Interval s -> Bounded (Interval (Sensitivity.instantiate' img db s))
+      | MSet (s, dt') -> Bounded (MSet (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
     end
+  | Monad dt -> Monad (instantiate_sens' img db dt)
   | _ -> dt
 
 (* submodules will want to refer to this type *)
@@ -112,14 +123,14 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
   | Free n -> (Name.to_string n, s)
   | Bound i -> (string_of_int i, s)
   | Precise p -> begin match p with
-      | N sens ->
+      | Natural sens ->
         let sens' = Sensitivity.to_string sens in
         ("N[" ^ sens' ^ "]", s)
-      | M (sens, dt') ->
+      | List (sens, dt') ->
         let sens' = Sensitivity.to_string sens in
         let dt'', s' = to_string' dt' s in
-        ("M[" ^ sens' ^ ", " ^ dt'' ^ "]", s')
-      | R sens ->
+        ("L(" ^ dt'' ^ ")[" ^ sens' ^ "]", s')
+      | Real sens ->
         let sens' = Sensitivity.to_string sens in
         ("R[" ^ sens' ^ "]", s)
     end
@@ -146,8 +157,15 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
     ("(" ^ l' ^ ", " ^ r' ^ ")", s'')
   | Base b -> (b, s) 
   | Bounded b -> begin match b with
-      | BR b -> ("BR[" ^ (Sensitivity.to_string b) ^ "]", s)
+      | Interval b -> ("Interval[" ^ (Sensitivity.to_string b) ^ "]", s)
+      | MSet (sens, dt') ->
+        let sens' = Sensitivity.to_string sens in
+        let dt'', s' = to_string' dt' s in
+        ("MSet(" ^ dt'' ^ ")[" ^ sens' ^ "]", s')
     end
+  | Monad p ->
+    let p', s' = to_string' p s in
+    ("O " ^ p', s')
 
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "∃"
@@ -157,16 +175,18 @@ and quantifier_to_string : quantifier -> string = function
 let rec free_vars : t -> Name.t list = function
   | Free n -> [n]
   | Precise p -> begin match p with
-      | N s -> Sensitivity.free_vars s
-      | M (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
-      | R s -> Sensitivity.free_vars s
+      | Natural s -> Sensitivity.free_vars s
+      | List (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
+      | Real s -> Sensitivity.free_vars s
     end
   | Quant (_, _, Sc body) -> free_vars body
   | Func (Modal (s, d), c) -> (free_vars d) @ (free_vars c) @ (Sensitivity.free_vars s)
   | Tensor (l, r) -> (free_vars l) @ (free_vars r)
   | Bounded b -> begin match b with
-      | BR s -> Sensitivity.free_vars s
+      | Interval s -> Sensitivity.free_vars s
+      | MSet (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
     end
+  | Monad p -> free_vars p
   | _ -> []
 
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)

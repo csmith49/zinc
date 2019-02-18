@@ -73,14 +73,15 @@ let concrete_support : Context.Relation.t list -> Name.t list = CCList.flat_map 
 let context_rel_to_sens_rel_list (vars : Name.t list) (cr : Context.Relation.t) : Sensitivity.Relation.t list =
   let f = fun v -> 
     match cr with 
-      | Context.Relation.Eq (l, r) -> Sensitivity.Relation.Eq (v <$ l, v <$ r) 
+      | Context.Relation.Eq (l, r) -> Sensitivity.Relation.Eq (v <$ l, v <$ r)
+      | Context.Relation.LEq (l, r) -> Sensitivity.Relation.LEq (v <$ l, v <$ r)
   in CCList.map f vars
 
 (* flattening *)
 let flatten : t -> Sensitivity.Relation.t list = fun c ->
   let (srs, crs) = separate (to_list c) in
   let variables = concrete_support crs in
-    CCList.sort_uniq (srs @ (CCList.flat_map (context_rel_to_sens_rel_list variables) crs))
+    CCList.sort_uniq ~cmp:Pervasives.compare (srs @ (CCList.flat_map (context_rel_to_sens_rel_list variables) crs))
 
 (* let's define an interpretation over a sensitivitity relation list *)
 (* first we need a notion of a model *)

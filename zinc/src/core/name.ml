@@ -14,6 +14,7 @@ let compare (l : t) (r : t) : int = match l, r with
       | 0 -> String.compare s t
       | _ -> ans
 
+let eq (l : t) (r : t) : bool = (compare l r) == 0
 (* hashing *)
 (* let hash : t -> int = function
   | N (s, i) -> (CCHash.poly s) lxor (CCInt.hash i) *)
