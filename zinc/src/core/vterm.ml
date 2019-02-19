@@ -29,8 +29,6 @@ type t =
     | TypeApp : t * Dtype.t -> t
     | SensAbs : (o scope) -> t
     | SensApp : t * Sensitivity.t -> t
-    (* External function calls *)
-    | External : string -> t
     (* wildcards for search *)
     | Wild : Context.t * Dtype.t * (o scope) -> t
     (* constant values *)
@@ -41,9 +39,9 @@ type t =
     | Pair : t * t -> t
     | Real of float
     | Bag of t list
-    | Function : string * (t -> t) -> t
+    | Function : string * (t -> t option) -> t
     (* recursion *)
-    | LetRec : (o scope) * (o scope) -> t
+    | Fix : (o scope) -> t
     (* probability layer *)
     | Do : t -> t
     | LetDraw : t * (o scope) -> t
@@ -130,10 +128,9 @@ and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (abstract' n db l, abstract' n db r)
     | Bag ts -> Bag (CCList.map (abstract' n db) ts)
     (* recursion *)
-    | LetRec (body, usage) ->
+    | Fix body ->
         let body' = bind_map (abstract_depth n db) body in
-        let usage' = bind_map (abstract_depth n db) usage in
-            LetRec (body', usage')
+            Fix body'
     (* probability layer *)
     | Do tm ->
         Do (abstract' n db tm)
@@ -201,10 +198,9 @@ and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (instantiate' img db l, instantiate' img db r)
     | Bag ts -> Bag (CCList.map (instantiate' img db) ts)
     (* recursion *)
-    | LetRec (body, usage) ->
+    | Fix body ->
         let body' = bind_map (instantiate_depth img db) body in
-        let usage' = bind_map (instantiate_depth img db) usage in
-            LetRec (body', usage')
+            Fix body'
     (* probability layer *)
     | Do tm ->
         Do (instantiate' img db tm)
@@ -275,10 +271,9 @@ and instantiate_dtype' (img : Dtype.t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (instantiate_dtype' img db l, instantiate_dtype' img db r)
     | Bag ts -> Bag (CCList.map (instantiate_dtype' img db) ts)
     (* recursion *)
-    | LetRec (body, usage) ->
+    | Fix body ->
         let body' = bind_map (instantiate_dtype_depth img db) body in
-        let usage' = bind_map (instantiate_dtype_depth img db) usage in
-            LetRec (body', usage')
+            Fix body'
     (* probability layer *)
     | Do tm ->
         Do (instantiate_dtype' img db tm)
@@ -349,10 +344,9 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
     | Pair (l, r) -> Pair (instantiate_sens' img db l, instantiate_sens' img db r)
     | Bag ts -> Bag (CCList.map (instantiate_sens' img db) ts)
     (* recursion *)
-    | LetRec (body, usage) ->
+    | Fix body ->
         let body' = bind_map (instantiate_sens_depth img db) body in
-        let usage' = bind_map (instantiate_sens_depth img db) usage in
-            LetRec (body', usage')
+            Fix body'
     (* probability layer *)
     | Do tm ->
         Do (instantiate_sens' img db tm)
@@ -365,90 +359,115 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
     (* for everything else, there's the default value *)
     | _ -> tm
 
-(* for reference in submodules *)
-type vterm = t
+(* printing *)
+let rec to_string : t -> string = function
+    | Var (Free n) -> Name.to_string n
+    | Var (Bound i) -> string_of_int i
+    | Abs (dt, Scope body) ->
+        let dt' = Dtype.to_string dt in
+        let body' = to_string body in
+            "Abs(" ^ dt' ^ ", " ^ body' ^ ")"
+    | App (f, arg) ->
+        let f' = to_string f in
+        let arg' = to_string arg in
+            "App(" ^ f' ^ ", " ^ arg' ^ ")"
+    | MatchNat (e, zero, Scope succ) ->
+        let e' = to_string e in
+        let zero' = to_string zero in
+        let succ' = to_string succ in
+            "MatchNat(" ^ e' ^ ", " ^ zero' ^ ", " ^ succ' ^ ")"
+    | MatchCons (e, nil, Widen (Scope cons)) ->
+        let e' = to_string e in
+        let nil' = to_string nil in
+        let cons' = to_string cons in
+            "MatchNat(" ^ e' ^ ", " ^ nil' ^ ", " ^ cons' ^ ")"
+    | TypeAbs (Scope tm) ->
+        to_string tm
+    | TypeApp (tm, dt) -> to_string tm
+    | SensAbs (Scope tm) ->
+        to_string tm
+    | SensApp (tm, sens) -> to_string tm
+    | Wild (context, dt, Scope body) ->
+        let context' = Context.to_string context in
+        let dt' = Dtype.to_string dt in
+        let body' = to_string body in
+            "Wild(" ^ context' ^ ", " ^ dt' ^ ", " ^ body' ^ ")"
+    | Nat (Zero) -> "Zero"
+    | Nat (Succ tm) -> "Succ(" ^ (to_string tm) ^ ")"
+    | ConsList (Nil) -> "Nil"
+    | ConsList (Cons (hd, tl)) ->
+        let hd' = to_string hd in
+        let tl' = to_string tl in
+            "Cons(" ^ hd' ^ ", " ^ tl' ^ ")"
+    | Bool (True) -> "True"
+    | Bool (False) -> "False"
+    | Discrete s -> s
+    | Pair (l, r) ->
+        let l' = to_string l in
+        let r' = to_string r in
+            "(" ^ l' ^ ", " ^ r' ^ ")"
+    | Real f -> string_of_float f
+    | Bag ts -> "BAG"
+    | Function (id, _) -> id
+    | Fix (Scope body) -> "Fix(" ^ (to_string body) ^ ")"
+    | Do tm -> "Do(" ^ (to_string tm) ^ ")"
+    | Return tm -> "Return(" ^ (to_string tm) ^ ")"
+    | LetDraw (dist, Scope usage) ->
+        let dist' = to_string dist in
+        let usage' = to_string usage in
+            "LetDraw(" ^ dist' ^ ", " ^ usage' ^ ")"
 
-(* allows us to move across binders in zippers *)
-module Prefix = struct
-    (* bindings contain all the information to recreate the og term *)
-    type binding =
-        | BAbs of Name.t * Dtype.t
-        | BTypeAbs of Name.t
-        | BSensAbs of Name.t
-        | BWild of Name.t * Context.t * Dtype.t
-        | BMatchNat of Name.t * vterm * vterm
-        | BMatchCons of Name.t * Name.t * vterm * vterm
-        | BLetRecBody of Name.t * (o scope)
-        | BLetRecUsage of Name.t * (o scope)
-        | BLetDraw of Name.t * vterm
-    (* and prefixes maintain a list of bindings *)
-    type t = binding list
-    (* alternate syntax - common across all zippers and whatnot *)
-    module Alt = struct
-        let (@>) (b : binding) (tm : vterm) : vterm = match b with
-            | BAbs (n, dt) -> Abs (dt, abstract (N.of_one n) tm)
-            | BTypeAbs n -> TypeAbs (abstract (N.of_one n) tm)
-            | BSensAbs n -> SensAbs (abstract (N.of_one n) tm)
-            | BWild (n, context, dt) ->
-                Wild (context, dt, abstract (N.of_one n) tm)
-            | BMatchNat (n, e, zero) ->
-                MatchNat (e, zero, abstract (N.of_one n) tm)
-            | BMatchCons (n, ns, e, nil) ->
-                MatchCons (e, nil, abstract (N.of_two n ns) tm)
-            | BLetRecBody (n, usage) ->
-                LetRec (abstract (N.of_one n) tm, usage)
-            | BLetRecUsage (n, body) ->
-                LetRec (body, abstract (N.of_one n) tm)
-            | BLetDraw (n, dist) ->
-                LetDraw (dist, abstract (N.of_one n) tm)
-        let (<@) (n : Name.t) (tm : vterm) : (binding * vterm) list = match tm with
-            | Abs (dt, tm) -> 
-                let n' = Var (Free n) in [
-                    (BAbs (n, dt), instantiate (N.of_one n') tm)
-                ]
-            | TypeAbs tm ->
-                let n' = Dtype.Free n in [
-                    (BTypeAbs n, instantiate_dtype (N.of_one n') tm)
-                ]
-            | SensAbs tm ->
-                let n' = Sensitivity.Free n in [
-                    (BSensAbs n, instantiate_sens (N.of_one n') tm)
-                ]
-            | Wild (context, dt, tm) ->
-                let n' = Var (Free n) in [
-                    (BWild (n, context, dt), instantiate (N.of_one n') tm)
-                ]
-            | MatchNat (e, zero, succ) ->
-                let n' = Var (Free n) in [
-                    (BMatchNat (n, e, zero), instantiate (N.of_one n') succ)
-                ]
-            | MatchCons (e, nil, cons) ->
-                let open Name.Alt in
-                    let n_head = n <+ "hd" in
-                    let n_tail = n <+ "tl" in
-                    let n_head' = Var (Free n_head) in
-                    let n_tail' = Var (Free n_tail) in [
-                        (BMatchCons (n_head, n_tail, e, nil), instantiate (N.of_two n_head' n_tail') cons)
-                    ]
-            | LetRec (body, usage) ->
-                let n' = Var (Free n) in
-                let body' = (
-                    BLetRecBody (n, usage), instantiate (N.of_one n') body
-                ) in
-                let usage' = (
-                    BLetRecUsage (n, body), instantiate (N.of_one n') usage
-                ) in [
-                    body'; usage'
-                ]
-            | LetDraw (dist, usage) ->
-                let n' = Var (Free n) in [
-                    (BLetDraw (n, dist), instantiate (N.of_one n') usage)
-                ]
-            | _ -> []
-    end
-    open Alt
-    (* append the entirety of a prefix *)
-    let rec bind (prefix : t) (tm : vterm) : vterm = match prefix with
-        | [] -> tm
-        | b :: rest -> bind rest (b @> tm)
-end
+(* evaluation *)
+open CCOpt.Infix
+
+let rec eval : t -> t option = function
+    (* compile function by wrapping it in a closure *)
+    | Abs (_, body) ->
+        let f = fun v -> eval (instantiate (N.of_one v) body) in
+            Some (Function ("CLOSURE", f))
+
+    (* function application happens in stages *)
+    | App (Function (_, f), arg) -> f arg >>= eval
+    | App (Fix body, arg) ->
+        let e = instantiate (N.of_one (Fix body)) body in
+        let tm = App (e, arg) in
+            eval tm
+    | App (tm, arg) -> begin match eval tm with
+        | Some tm -> eval (App (tm, arg))
+        | _ -> None
+        end
+    
+    (* pattern matching *)
+    | MatchNat (e, zero, succ) -> begin match (eval e) with
+        | Some (Nat Zero) -> eval zero
+        | Some (Nat (Succ tm)) -> eval (instantiate (N.of_one tm) succ)
+        | _ -> None
+        end
+    | MatchCons (e, nil, cons) -> begin match (eval e) with
+        | Some (ConsList Nil) -> eval nil
+        | Some (ConsList (Cons (hd, tl))) -> eval (instantiate (N.of_two hd tl) cons)
+        | _ -> None
+        end
+
+    (* we basically skip these *)
+    | TypeApp (tm, dt) -> eval tm
+    | SensApp (tm, dt) -> eval tm
+    
+    (* evaluating values *)
+    | Nat (Succ tm) -> CCOpt.map (fun x -> Nat (Succ x)) (eval tm)
+    | ConsList (Cons (hd, tl)) -> 
+        CCOpt.map2 (fun x -> fun y -> ConsList (Cons (x, y))) (eval hd) (eval tl)
+    | Pair (l, r) ->
+        CCOpt.map2 (fun x -> fun y -> Pair (x, y)) (eval l) (eval r)
+    | Bag ts -> ts
+        |> CCList.map eval
+        |> CCOpt.sequence_l
+        |> CCOpt.map (fun x -> Bag x)
+
+    (* probability layer *)
+    | Do tm -> eval tm
+    | Return tm -> eval tm
+    | LetDraw (dist, usage) -> eval (instantiate (N.of_one dist) usage)
+
+    (* catch-all *)
+    | (_ as tm) -> Some tm
