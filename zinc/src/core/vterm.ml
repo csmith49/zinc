@@ -41,7 +41,7 @@ type t =
     | Pair : t * t -> t
     | Real of float
     | Bag of t list
-    | Function : (t -> t) -> t
+    | Function : string * (t -> t) -> t
     (* recursion *)
     | LetRec : (o scope) * (o scope) -> t
     (* probability layer *)
@@ -364,3 +364,91 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
         Return (instantiate_sens' img db tm)
     (* for everything else, there's the default value *)
     | _ -> tm
+
+(* for reference in submodules *)
+type vterm = t
+
+(* allows us to move across binders in zippers *)
+module Prefix = struct
+    (* bindings contain all the information to recreate the og term *)
+    type binding =
+        | BAbs of Name.t * Dtype.t
+        | BTypeAbs of Name.t
+        | BSensAbs of Name.t
+        | BWild of Name.t * Context.t * Dtype.t
+        | BMatchNat of Name.t * vterm * vterm
+        | BMatchCons of Name.t * Name.t * vterm * vterm
+        | BLetRecBody of Name.t * (o scope)
+        | BLetRecUsage of Name.t * (o scope)
+        | BLetDraw of Name.t * vterm
+    (* and prefixes maintain a list of bindings *)
+    type t = binding list
+    (* alternate syntax - common across all zippers and whatnot *)
+    module Alt = struct
+        let (@>) (b : binding) (tm : vterm) : vterm = match b with
+            | BAbs (n, dt) -> Abs (dt, abstract (N.of_one n) tm)
+            | BTypeAbs n -> TypeAbs (abstract (N.of_one n) tm)
+            | BSensAbs n -> SensAbs (abstract (N.of_one n) tm)
+            | BWild (n, context, dt) ->
+                Wild (context, dt, abstract (N.of_one n) tm)
+            | BMatchNat (n, e, zero) ->
+                MatchNat (e, zero, abstract (N.of_one n) tm)
+            | BMatchCons (n, ns, e, nil) ->
+                MatchCons (e, nil, abstract (N.of_two n ns) tm)
+            | BLetRecBody (n, usage) ->
+                LetRec (abstract (N.of_one n) tm, usage)
+            | BLetRecUsage (n, body) ->
+                LetRec (body, abstract (N.of_one n) tm)
+            | BLetDraw (n, dist) ->
+                LetDraw (dist, abstract (N.of_one n) tm)
+        let (<@) (n : Name.t) (tm : vterm) : (binding * vterm) list = match tm with
+            | Abs (dt, tm) -> 
+                let n' = Var (Free n) in [
+                    (BAbs (n, dt), instantiate (N.of_one n') tm)
+                ]
+            | TypeAbs tm ->
+                let n' = Dtype.Free n in [
+                    (BTypeAbs n, instantiate_dtype (N.of_one n') tm)
+                ]
+            | SensAbs tm ->
+                let n' = Sensitivity.Free n in [
+                    (BSensAbs n, instantiate_sens (N.of_one n') tm)
+                ]
+            | Wild (context, dt, tm) ->
+                let n' = Var (Free n) in [
+                    (BWild (n, context, dt), instantiate (N.of_one n') tm)
+                ]
+            | MatchNat (e, zero, succ) ->
+                let n' = Var (Free n) in [
+                    (BMatchNat (n, e, zero), instantiate (N.of_one n') succ)
+                ]
+            | MatchCons (e, nil, cons) ->
+                let open Name.Alt in
+                    let n_head = n <+ "hd" in
+                    let n_tail = n <+ "tl" in
+                    let n_head' = Var (Free n_head) in
+                    let n_tail' = Var (Free n_tail) in [
+                        (BMatchCons (n_head, n_tail, e, nil), instantiate (N.of_two n_head' n_tail') cons)
+                    ]
+            | LetRec (body, usage) ->
+                let n' = Var (Free n) in
+                let body' = (
+                    BLetRecBody (n, usage), instantiate (N.of_one n') body
+                ) in
+                let usage' = (
+                    BLetRecUsage (n, body), instantiate (N.of_one n') usage
+                ) in [
+                    body'; usage'
+                ]
+            | LetDraw (dist, usage) ->
+                let n' = Var (Free n) in [
+                    (BLetDraw (n, dist), instantiate (N.of_one n') usage)
+                ]
+            | _ -> []
+    end
+    open Alt
+    (* append the entirety of a prefix *)
+    let rec bind (prefix : t) (tm : vterm) : vterm = match prefix with
+        | [] -> tm
+        | b :: rest -> bind rest (b @> tm)
+end
