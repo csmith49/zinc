@@ -22,8 +22,8 @@ type t =
     | Abs : Dtype.t * (o scope) -> t
     | App : t * t -> t
     (* pattern-matching naturals and lists *)
-    | MatchNat : t * t * (o scope) -> t
-    | MatchCons : t * t * ((o s) scope) -> t
+    | MatchNat : t * t * Sensitivity.t * (o scope) -> t
+    | MatchCons : Dtype.t * t * t * Sensitivity.t * ((o s) scope) -> t
     (* type and sensitivity polymorphism *)
     | TypeAbs : (o scope) -> t
     | TypeApp : t * Dtype.t -> t
@@ -41,10 +41,10 @@ type t =
     | Bag of t list
     | Function : string * (t -> t option) -> t
     (* recursion *)
-    | Fix : (o scope) -> t
+    | Fix : Dtype.t * (o scope) -> t
     (* probability layer *)
     | Do : t -> t
-    | LetDraw : t * (o scope) -> t
+    | LetDraw : Dtype.t * t * (o scope) -> t
     | Return : t -> t
 and _ scope =
     | Scope : t -> o scope
@@ -92,16 +92,19 @@ and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
             Abs (dt', s')
     | App (l, r) -> App (abstract' n db l, abstract' n db r)
     (* pattern-matching *)
-    | MatchNat (e, zero, succ) ->
+    | MatchNat (e, zero, i, succ) ->
         let e' = abstract' n db e in
         let zero' = abstract' n db zero in
+        let i' = Sensitivity.abstract' n db i in
         let succ' = bind_map (abstract_depth n db) succ in
-            MatchNat (e', zero', succ')
-    | MatchCons (e, nil, cons) ->
+            MatchNat (e', zero', i', succ')
+    | MatchCons (dt, e, nil, i, cons) ->
+        let dt' = Dtype.abstract' n db dt in
         let e' = abstract' n db e in
         let nil' = abstract' n db nil in
+        let i' = Sensitivity.abstract' n db i in
         let cons' = bind_map (abstract_depth n db) cons in
-            MatchCons (e', nil', cons')
+            MatchCons (dt', e', nil', i', cons')
     (* type and sensitivity polymorphism *)
     | TypeAbs s ->
         let s' = bind_map (abstract_depth n db) s in
@@ -128,20 +131,26 @@ and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (abstract' n db l, abstract' n db r)
     | Bag ts -> Bag (CCList.map (abstract' n db) ts)
     (* recursion *)
-    | Fix body ->
+    | Fix (dt, body) ->
+        let dt' = Dtype.abstract' n db dt in 
         let body' = bind_map (abstract_depth n db) body in
-            Fix body'
+            Fix (dt', body')
     (* probability layer *)
     | Do tm ->
         Do (abstract' n db tm)
-    | LetDraw (dist, usage) ->
+    | LetDraw (dt, dist, usage) ->
+        let dt' = Dtype.abstract' n db dt in 
         let dist' = abstract' n db dist in
         let usage' = bind_map (abstract_depth n db) usage in
-            LetDraw (dist', usage')
+            LetDraw (dt', dist', usage')
     | Return tm ->
         Return (abstract' n db tm)
     (* if there's no recursion, just return *)
     | _ -> tm
+
+(* alternate abstractions *)
+let abstract_one = fun n -> fun tm -> abstract (N.of_one n) tm
+let abstract_two = fun n -> fun m -> fun tm -> abstract (N.of_two n m) tm
 
 let rec instantiate : type n . (t, n) N.t -> n scope -> t = fun imgs -> fun s -> match imgs with
     | N.Base img -> begin match s with
@@ -163,16 +172,16 @@ and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
     | App (l, r) ->
         App (instantiate' img db l, instantiate' img db r)
     (* pattern-matching *)
-    | MatchNat (e, zero, succ) ->
+    | MatchNat (e, zero, i, succ) ->
         let e' = instantiate' img db e in
         let zero' = instantiate' img db zero in
         let succ' = bind_map (instantiate_depth img db) succ in
-            MatchNat (e', zero', succ')
-    | MatchCons (e, nil, cons) ->
+            MatchNat (e', zero', i, succ')
+    | MatchCons (dt, e, nil, i, cons) ->
         let e' = instantiate' img db e in
         let nil' = instantiate' img db nil in
         let cons' = bind_map (instantiate_depth img db) cons in
-            MatchCons (e', nil', cons')
+            MatchCons (dt, e', nil', i, cons')
     (* type and sensitivity polymorphism - note the lack of recursion into apps *)
     | TypeAbs s ->
         let s' = bind_map (instantiate_depth img db) s in
@@ -198,16 +207,16 @@ and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (instantiate' img db l, instantiate' img db r)
     | Bag ts -> Bag (CCList.map (instantiate' img db) ts)
     (* recursion *)
-    | Fix body ->
+    | Fix (dt, body) ->
         let body' = bind_map (instantiate_depth img db) body in
-            Fix body'
+            Fix (dt, body')
     (* probability layer *)
     | Do tm ->
         Do (instantiate' img db tm)
-    | LetDraw (dist, usage) ->
+    | LetDraw (dt, dist, usage) ->
         let dist' = instantiate' img db dist in
         let usage' = bind_map (instantiate_depth img db) usage in
-            LetDraw (dist', usage')
+            LetDraw (dt, dist', usage')
     | Return tm ->
         Return (instantiate' img db tm)
     (* for everything else, there's the default value *)
@@ -235,16 +244,17 @@ and instantiate_dtype' (img : Dtype.t) (db : int) (tm : t) : t = match tm with
     | App (l, r) ->
         App (instantiate_dtype' img db l, instantiate_dtype' img db r)
     (* pattern-matching *)
-    | MatchNat (e, zero, succ) ->
+    | MatchNat (e, zero, i, succ) ->
         let e' = instantiate_dtype' img db e in
         let zero' = instantiate_dtype' img db zero in
         let succ' = bind_map (instantiate_dtype_depth img db) succ in
-            MatchNat (e', zero', succ')
-    | MatchCons (e, nil, cons) ->
+            MatchNat (e', zero', i, succ')
+    | MatchCons (dt, e, nil, i, cons) ->
+        let dt' = Dtype.instantiate' img db dt in
         let e' = instantiate_dtype' img db e in
         let nil' = instantiate_dtype' img db nil in
         let cons' = bind_map (instantiate_dtype_depth img db) cons in
-            MatchCons (e', nil', cons')
+            MatchCons (dt', e', nil', i, cons')
     (* type and sensitivity polymorphism - note the lack of recursion into apps *)
     | TypeAbs s ->
         let s' = bind_map (instantiate_dtype_depth img db) s in
@@ -271,16 +281,18 @@ and instantiate_dtype' (img : Dtype.t) (db : int) (tm : t) : t = match tm with
     | Pair (l, r) -> Pair (instantiate_dtype' img db l, instantiate_dtype' img db r)
     | Bag ts -> Bag (CCList.map (instantiate_dtype' img db) ts)
     (* recursion *)
-    | Fix body ->
+    | Fix (dt, body) ->
+        let dt' = Dtype.instantiate' img db dt in
         let body' = bind_map (instantiate_dtype_depth img db) body in
-            Fix body'
+            Fix (dt', body')
     (* probability layer *)
     | Do tm ->
         Do (instantiate_dtype' img db tm)
-    | LetDraw (dist, usage) ->
+    | LetDraw (dt, dist, usage) ->
+        let dt' = Dtype.instantiate' img db dt in
         let dist' = instantiate_dtype' img db dist in
         let usage' = bind_map (instantiate_dtype_depth img db) usage in
-            LetDraw (dist', usage')
+            LetDraw (dt', dist', usage')
     | Return tm ->
         Return (instantiate_dtype' img db tm)
     (* for everything else, there's the default value *)
@@ -308,16 +320,19 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
     | App (l, r) ->
         App (instantiate_sens' img db l, instantiate_sens' img db r)
     (* pattern-matching *)
-    | MatchNat (e, zero, succ) ->
+    | MatchNat (e, zero, i, succ) ->
         let e' = instantiate_sens' img db e in
         let zero' = instantiate_sens' img db zero in
+        let i' = Sensitivity.instantiate' img db i in
         let succ' = bind_map (instantiate_sens_depth img db) succ in
-            MatchNat (e', zero', succ')
-    | MatchCons (e, nil, cons) ->
+            MatchNat (e', zero', i', succ')
+    | MatchCons (dt, e, nil, i, cons) ->
+        let dt' = Dtype.instantiate_sens' img db dt in
         let e' = instantiate_sens' img db e in
         let nil' = instantiate_sens' img db nil in
+        let i' = Sensitivity.instantiate' img db i in
         let cons' = bind_map (instantiate_sens_depth img db) cons in
-            MatchCons (e', nil', cons')
+            MatchCons (dt', e', nil', i', cons')
     (* type and sensitivity polymorphism - note the lack of recursion into apps *)
     | TypeAbs s ->
         let s' = bind_map (instantiate_sens_depth img db) s in
@@ -344,16 +359,18 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
     | Pair (l, r) -> Pair (instantiate_sens' img db l, instantiate_sens' img db r)
     | Bag ts -> Bag (CCList.map (instantiate_sens' img db) ts)
     (* recursion *)
-    | Fix body ->
+    | Fix (dt, body) ->
+        let dt' = Dtype.instantiate_sens' img db dt in
         let body' = bind_map (instantiate_sens_depth img db) body in
-            Fix body'
+            Fix (dt', body')
     (* probability layer *)
     | Do tm ->
         Do (instantiate_sens' img db tm)
-    | LetDraw (dist, usage) ->
+    | LetDraw (dt, dist, usage) ->
+        let dt' = Dtype.instantiate_sens' img db dt in
         let dist' = instantiate_sens' img db dist in
         let usage' = bind_map (instantiate_sens_depth img db) usage in
-            LetDraw (dist', usage')
+            LetDraw (dt', dist', usage')
     | Return tm ->
         Return (instantiate_sens' img db tm)
     (* for everything else, there's the default value *)
@@ -371,16 +388,19 @@ let rec to_string : t -> string = function
         let f' = to_string f in
         let arg' = to_string arg in
             "App(" ^ f' ^ ", " ^ arg' ^ ")"
-    | MatchNat (e, zero, Scope succ) ->
+    | MatchNat (e, zero, i, Scope succ) ->
         let e' = to_string e in
         let zero' = to_string zero in
+        let i' = Sensitivity.to_string i in
         let succ' = to_string succ in
-            "MatchNat(" ^ e' ^ ", " ^ zero' ^ ", " ^ succ' ^ ")"
-    | MatchCons (e, nil, Widen (Scope cons)) ->
+            "MatchNat(" ^ e' ^ ", " ^ zero' ^ ", " ^ ", " ^ i' ^ ", " ^ succ' ^ ")"
+    | MatchCons (dt, e, nil, i, Widen (Scope cons)) ->
+        let dt' = Dtype.to_string dt in
         let e' = to_string e in
         let nil' = to_string nil in
+        let i' = Sensitivity.to_string i in
         let cons' = to_string cons in
-            "MatchNat(" ^ e' ^ ", " ^ nil' ^ ", " ^ cons' ^ ")"
+            "MatchNat(" ^ dt' ^ ", " ^ e' ^ ", " ^ nil' ^ ", " ^ i' ^ ", " ^ cons' ^ ")"
     | TypeAbs (Scope tm) ->
         to_string tm
     | TypeApp (tm, dt) -> to_string tm
@@ -409,13 +429,14 @@ let rec to_string : t -> string = function
     | Real f -> string_of_float f
     | Bag ts -> "BAG"
     | Function (id, _) -> id
-    | Fix (Scope body) -> "Fix(" ^ (to_string body) ^ ")"
+    | Fix (dt, Scope body) -> "Fix(" ^ (Dtype.to_string dt) ^ ", " ^ (to_string body) ^ ")"
     | Do tm -> "Do(" ^ (to_string tm) ^ ")"
     | Return tm -> "Return(" ^ (to_string tm) ^ ")"
-    | LetDraw (dist, Scope usage) ->
+    | LetDraw (dt, dist, Scope usage) ->
+        let dt' = Dtype.to_string dt in
         let dist' = to_string dist in
         let usage' = to_string usage in
-            "LetDraw(" ^ dist' ^ ", " ^ usage' ^ ")"
+            "LetDraw(" ^ dt' ^ ", " ^ dist' ^ ", " ^ usage' ^ ")"
 
 (* evaluation *)
 open CCOpt.Infix
@@ -428,8 +449,8 @@ let rec eval : t -> t option = function
 
     (* function application happens in stages *)
     | App (Function (_, f), arg) -> f arg >>= eval
-    | App (Fix body, arg) ->
-        let e = instantiate (N.of_one (Fix body)) body in
+    | App ((Fix (_, body) as fix), arg) ->
+        let e = instantiate (N.of_one fix) body in
         let tm = App (e, arg) in
             eval tm
     | App (tm, arg) -> begin match eval tm with
@@ -438,12 +459,12 @@ let rec eval : t -> t option = function
         end
     
     (* pattern matching *)
-    | MatchNat (e, zero, succ) -> begin match (eval e) with
+    | MatchNat (e, zero, _, succ) -> begin match (eval e) with
         | Some (Nat Zero) -> eval zero
         | Some (Nat (Succ tm)) -> eval (instantiate (N.of_one tm) succ)
         | _ -> None
         end
-    | MatchCons (e, nil, cons) -> begin match (eval e) with
+    | MatchCons (_, e, nil, _, cons) -> begin match (eval e) with
         | Some (ConsList Nil) -> eval nil
         | Some (ConsList (Cons (hd, tl))) -> eval (instantiate (N.of_two hd tl) cons)
         | _ -> None
@@ -467,7 +488,36 @@ let rec eval : t -> t option = function
     (* probability layer *)
     | Do tm -> eval tm
     | Return tm -> eval tm
-    | LetDraw (dist, usage) -> eval (instantiate (N.of_one dist) usage)
+    | LetDraw (_, dist, usage) -> eval (instantiate (N.of_one dist) usage)
 
     (* catch-all *)
     | (_ as tm) -> Some tm
+
+(* ease of construction *)
+module Alt = struct
+    (* wrapping simple constructions *)
+    let var : string -> t = fun s -> Var (Free (Name.of_string s))
+
+    let rec nat : int -> t = fun n -> match n with
+        | 0 -> Nat (Zero)
+        | n -> Nat (Succ (nat (n - 1)))
+
+    let rec conslist : t list -> t = function
+        | [] -> ConsList (Nil)
+        | x :: xs -> ConsList (Cons (x, conslist xs))
+
+    let fix (v : t) (body : t) : t = match v with
+        | Var (Free n) -> Fix (Dtype.Base "test", abstract (N.of_one n) body)
+        | _ -> v
+
+    let abs (v : t) (body : t) : t = match v with
+        | Var (Free n) -> Abs (Dtype.Base "test", abstract (N.of_one n) body)
+        | _ -> v
+
+    let match_nat (e : t) (zero : t) (sp : t * t) : t = match sp with
+        | (Var (Free n), succ) ->
+            MatchNat (e, zero, Sensitivity.Free (Name.of_string "i"), abstract (N.of_one n) succ)
+        | _ -> e
+end
+
+type vterm = t
