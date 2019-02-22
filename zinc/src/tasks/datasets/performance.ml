@@ -16,18 +16,18 @@ let performance_01 = {
   budget = 1;
   grammar = performance_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 100 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Real 2.0);
-    (Value.Bag [
+    ], Vterm.Real 2.0);
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 100 90 90;
       make 50 true 20 0 0 0;
       make 70 true 10 97 97 97;      
-    ], Value.Real 3.0)
+    ], Vterm.Real 3.0)
   ]
 }
 
@@ -37,23 +37,23 @@ let performance_02 = {
   name = "performance_02";
   mechanism = Exponential (
     Signature.Performance.bracket_t,
-    [Value.Discrete "low"; Value.Discrete "medium"; Value.Discrete "high"]
+    [Vterm.Discrete "low"; Vterm.Discrete "medium"; Vterm.Discrete "high"]
   );
   budget = 101;
   grammar = performance_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Discrete "high");
-    (Value.Bag [
+    ], Vterm.Discrete "high");
+    (Vterm.Bag [
       make 0 true 2 0 100 100;
       make 80 true 20 100 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Discrete "medium")
+    ], Vterm.Discrete "medium")
   ]
 }
 
@@ -62,19 +62,19 @@ let performance_03 = {
   name = "performance_03";
   mechanism = Partition (
     Make.bool,
-    [Value.Bool true; Value.Bool false]
+    [Vterm.Bool True; Vterm.Bool False]
   );
   budget = 101;
   grammar = performance_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 95 97;      
-    ], Value.Bag [
-      Value.Pair (Value.Bool true, Value.Real 95.0);
-      Value.Pair (Value.Bool false, Value.Real 0.0);
+    ], Vterm.Bag [
+      Vterm.Pair (Vterm.Bool True, Vterm.Real 95.0);
+      Vterm.Pair (Vterm.Bool False, Vterm.Real 0.0);
     ]);
   ]
 }
@@ -87,19 +87,19 @@ let performance_04 = {
   budget = 101;
   grammar = performance_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Real 0.0);
-    (Value.Bag [
+    ], Vterm.Real 0.0);
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 72 0 2;
       make 50 false 20 72 0 2;
       make 98 true 10 97 97 80;      
-    ], Value.Real 144.0);
+    ], Vterm.Real 144.0);
   ]
 }
 
@@ -111,19 +111,19 @@ let performance_05 = {
   budget = 101;
   grammar = performance_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Real 50.0);
-    (Value.Bag [
+    ], Vterm.Real 50.0);
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 60 false 20 72 0 2;
       make 50 false 20 72 0 2;
       make 98 true 10 97 97 80;      
-    ], Value.Real 55.0);
+    ], Vterm.Real 55.0);
   ]
 }
 
@@ -133,23 +133,23 @@ let performance_06 = {
   name = "performance_06";
   mechanism = Exponential (
     Make.bool,
-    [Value.Bool true; Value.Bool false;]
+    [Vterm.Bool True; Vterm.Bool False;]
   );
   budget = 1;
   grammar = performance_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Bool true);
-    (Value.Bag [
+    ], Vterm.Bool True);
+    (Vterm.Bag [
       make 0 true 2 0 100 100;
       make 80 false 20 100 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 97 97;      
-    ], Value.Bool false)
+    ], Vterm.Bool False)
   ]
 }
 
@@ -158,20 +158,20 @@ let performance_07 = {
   name = "performance_07";
   mechanism = Partition (
     Signature.Performance.bracket_t,
-    [Value.Discrete "low"; Value.Discrete "medium"; Value.Discrete "high"]
+    [Vterm.Discrete "low"; Vterm.Discrete "medium"; Vterm.Discrete "high"]
   );
   budget = 100;
   grammar = performance_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       make 100 true 2 100 100 100;
       make 80 true 20 70 90 90;
       make 50 false 20 0 0 0;
       make 98 true 10 97 95 97;      
-    ], Value.Bag [
-      Value.Pair (Value.Discrete "low", Value.Real 0.0);
-      Value.Pair (Value.Discrete "medium", Value.Real 90.0);
-      Value.Pair (Value.Discrete "high", Value.Real 195.0);
+    ], Vterm.Bag [
+      Vterm.Pair (Vterm.Discrete "low", Vterm.Real 0.0);
+      Vterm.Pair (Vterm.Discrete "medium", Vterm.Real 90.0);
+      Vterm.Pair (Vterm.Discrete "high", Vterm.Real 195.0);
     ]);
   ]
 }

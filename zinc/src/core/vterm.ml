@@ -39,7 +39,7 @@ type t =
     | Pair : t * t -> t
     | Real of float
     | Bag of t list
-    | Function : string * (t -> t option) -> t
+    | Function : string * (t -> evaluation) -> t
     (* recursion *)
     | Fix : Dtype.t * (o scope) -> t
     (* probability layer *)
@@ -61,6 +61,9 @@ and conslist =
 and boolean =
     | True
     | False
+and evaluation =
+    | Diverge
+    | Value of t
 
 let rec binding_depth : type n . n scope -> int = function
     | Scope _ -> 1
@@ -221,6 +224,9 @@ and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
         Return (instantiate' img db tm)
     (* for everything else, there's the default value *)
     | _ -> tm
+
+let instantiate_one = fun n -> fun tm -> instantiate (N.of_one n) tm
+let instantiate_two = fun n -> fun m -> fun tm -> instantiate (N.of_two n m) tm
 
 (* modification to instantiate dtypes instead *)
 let rec instantiate_dtype : type n . (Dtype.t, n) N.t -> n scope -> t = fun imgs -> fun s -> match imgs with
@@ -438,65 +444,230 @@ let rec to_string : t -> string = function
         let usage' = to_string usage in
             "LetDraw(" ^ dt' ^ ", " ^ dist' ^ ", " ^ usage' ^ ")"
 
+type vterm = t
+
 (* evaluation *)
+module Evaluation = struct
+    type t = evaluation
+
+    let return : vterm -> t = fun tm -> Value tm
+    let pure = return
+
+    let bind : t -> (vterm -> t) -> t = function
+        | Diverge -> fun _ -> Diverge
+        | Value tm -> fun f -> f tm
+
+    let map : (vterm -> vterm) -> t  -> t = fun f -> function
+        | Diverge -> Diverge
+        | Value tm -> Value (f tm)
+    let flat_map f x = bind x f
+    let map2 : (vterm -> vterm -> vterm) -> t -> t -> t = fun f -> function
+        | Diverge -> fun _ -> Diverge
+        | Value tm -> map (f tm)
+    let flat_map2 : (vterm -> vterm -> t) -> t -> t -> t = fun f -> function
+        | Diverge -> fun _ -> Diverge
+        | Value tm -> flat_map (f tm)
+
+    module Infix = struct
+        let (>>=) = bind
+
+        let (<$>) = map
+        
+        let (>|=) = fun f -> fun v -> v <$> f
+
+        let (<+>) : t -> t -> t = function
+            | Diverge -> fun v -> v
+            | (Value _ as v) -> fun _ -> v
+    end
+    
+    let to_string : t -> string = function
+        | Diverge -> "Diverge"
+        | Value tm -> to_string tm
+    
+    let to_option : t -> vterm option = function
+        | Diverge -> None
+        | Value tm -> Some tm
+
+    let of_option : vterm option -> t = function
+        | None -> Diverge
+        | Some tm -> Value tm
+
+    let diverges : t -> bool = function
+        | Diverge -> true
+        | _ -> false
+
+    (* for messing with particular kinds of values *)
+    let real_map : (float -> float) -> t -> t = fun f -> function
+        | Value (Real r) -> Value (Real (f r))
+        | _ -> Diverge
+    let real_map2 : (float -> float -> float) -> t -> t -> t = fun f -> function
+        | Value (Real x) -> real_map (f x)
+        | _ -> fun _ -> Diverge
+    
+    let real_filter : (float -> bool) -> t -> t = fun f -> function
+        | Value (Real r) -> if f r then Value (Bool True) else Value (Bool False)
+        | _ -> Diverge
+
+    let to_real : t -> float option = function
+        | Value (Real f) -> Some f
+        | _ -> None
+    let of_real : float -> t = fun f -> Value (Real f)
+
+    let is_true : t -> bool = function
+        | Value (Bool True) -> true
+        | _ -> false
+    let is_false : t -> bool = function
+        | Value (Bool False) -> true
+        | _ -> false
+    let of_bool : bool -> t = function
+        | true -> Value (Bool True)
+        | false -> Value (Bool False)
+
+    let bag_map : (vterm -> t) -> t -> t = fun f -> function
+        | Value (Bag ts) -> ts
+            |> CCList.map f
+            |> CCList.map to_option
+            |> CCOpt.sequence_l
+            |> CCOpt.map (fun v -> Bag v)
+            |> of_option
+        | _ -> Diverge
+
+    let real_geq : t -> t -> bool = fun b -> fun s ->
+        CCOpt.map2 (>=) (to_real b) (to_real s) |> CCOpt.get_or ~default:false
+end
+
 open CCOpt.Infix
 
-let rec eval : t -> t option = function
-    (* compile function by wrapping it in a closure *)
-    | Abs (_, body) ->
-        let f = fun v -> eval (instantiate (N.of_one v) body) in
-            Some (Function ("CLOSURE", f))
+open Evaluation.Infix
 
-    (* function application happens in stages *)
+let rec eval : t -> Evaluation.t = function
+    (* compile function by wrapping it as a closure *)
+    | Abs (_, body) ->
+        let closure v = eval (instantiate_one v body) in
+            Function ("closure", closure) |> Evaluation.return
+
+    (* function application has several options for success *)
     | App (Function (_, f), arg) -> f arg >>= eval
     | App ((Fix (_, body) as fix), arg) ->
-        let e = instantiate (N.of_one fix) body in
+        let e = instantiate_one fix body in
         let tm = App (e, arg) in
             eval tm
-    | App (tm, arg) -> begin match eval tm with
-        | Some tm -> eval (App (tm, arg))
-        | _ -> None
-        end
-    
+    | App (tm, arg) -> 
+        eval tm >|= (fun tm -> App (tm, arg)) >>= eval
+
     (* pattern matching *)
-    | MatchNat (e, zero, _, succ) -> begin match (eval e) with
-        | Some (Nat Zero) -> eval zero
-        | Some (Nat (Succ tm)) -> eval (instantiate (N.of_one tm) succ)
-        | _ -> None
+    | MatchNat (e, zero, _, succ) -> begin match eval e with
+        | Value (Nat Zero) -> eval zero
+        | Value (Nat (Succ tm)) -> eval (instantiate_one tm succ)
+        | _ -> Diverge
         end
-    | MatchCons (_, e, nil, _, cons) -> begin match (eval e) with
-        | Some (ConsList Nil) -> eval nil
-        | Some (ConsList (Cons (hd, tl))) -> eval (instantiate (N.of_two hd tl) cons)
-        | _ -> None
+    | MatchCons (_, e, nil, _, cons) -> begin match eval e with
+        | Value (ConsList Nil) -> eval nil
+        | Value (ConsList (Cons (hd, tl))) ->
+            cons |> instantiate_two hd tl |> eval
+        | _ -> Diverge
         end
 
-    (* we basically skip these *)
-    | TypeApp (tm, dt) -> eval tm
-    | SensApp (tm, dt) -> eval tm
-    
-    (* evaluating values *)
-    | Nat (Succ tm) -> CCOpt.map (fun x -> Nat (Succ x)) (eval tm)
-    | ConsList (Cons (hd, tl)) -> 
-        CCOpt.map2 (fun x -> fun y -> ConsList (Cons (x, y))) (eval hd) (eval tl)
+    (* skip over these *)
+    | TypeApp (tm, _) -> eval tm
+    | SensApp (tm, _) -> eval tm
+
+    (* values *)
+    | Nat (Succ tm) -> eval tm >|= fun v -> Nat (Succ v)
+    | ConsList (Cons (hd, tl)) ->
+        let hd = eval hd in
+        let tl = eval tl in
+            Evaluation.map2 (fun x -> fun y -> ConsList (Cons (x, y))) hd tl
     | Pair (l, r) ->
-        CCOpt.map2 (fun x -> fun y -> Pair (x, y)) (eval l) (eval r)
-    | Bag ts -> ts
-        |> CCList.map eval
-        |> CCOpt.sequence_l
-        |> CCOpt.map (fun x -> Bag x)
+        let l = eval l in
+        let r = eval r in
+            Evaluation.map2 (fun x -> fun y -> Pair (x, y)) l r
+    | (Bag _ as tm) -> Value tm |> Evaluation.bag_map eval
 
     (* probability layer *)
     | Do tm -> eval tm
     | Return tm -> eval tm
-    | LetDraw (_, dist, usage) -> eval (instantiate (N.of_one dist) usage)
+    | LetDraw (_, dist, usage) ->
+        usage |> instantiate_one dist |> eval
+    
+    (* otherwise, just lift *)
+    | (_ as tm) -> Evaluation.return tm
 
-    (* catch-all *)
-    | (_ as tm) -> Some tm
+(* how big is the term *)
+let rec size : t -> int = function
+    | Var (_) -> 1
+    | Abs (_, Scope body) -> 1 + (size body)
+    | App (l, r) -> 1 + (size l) + (size r)
+    
+    | MatchNat (e, zero, _, Scope succ) ->
+        1 + (size e) + (size zero) + (size succ)
+    | MatchCons (_, e, nil, _, Widen (Scope cons)) ->
+        1 + (size e) + (size nil) + (size cons)
+    
+    | TypeAbs (Scope body) -> size body
+    | TypeApp (body, _) -> size body
+    | SensAbs (Scope body) -> size body
+    | SensApp (body, _) -> size body
+
+    | Wild (_, _, Scope body) -> 1 + (size body)
+    
+    | Nat Zero -> 1
+    | Nat (Succ tm) -> 1 + (size tm)
+    | ConsList Nil -> 1
+    | ConsList (Cons (hd, tl)) -> 1 + (size hd) + (size tl)
+    | Bool _ -> 1
+    | Discrete _ -> 1
+    | Pair (l, r) -> 1 + (size l) + (size r)
+    | Real _ -> 1
+    | Bag ts -> ts
+        |> CCList.map size
+        |> CCList.fold_left (+) 0
+    | Function _ -> 1
+    
+    | Fix (_, Scope body) -> 1 + (size body)
+    
+    | Do tm -> 1 + (size tm)
+    | LetDraw (_, tm, Scope body) ->
+        1 + (size tm) + (size body)
+    | Return tm -> 1 + (size tm)
+
+(* is this a wild binder *)
+let is_wild_binder : t -> bool = function
+    | Wild _ -> true
+    | _ -> false
+
+let rec wild_closed : t -> bool = function
+    | Var _ -> true
+    | Abs (_, Scope body) -> wild_closed body
+    | App (l, r) -> (wild_closed l) && (wild_closed r)
+    | MatchNat (e, zero, _, Scope succ) ->
+        (wild_closed e) && (wild_closed zero) && (wild_closed succ)
+    | MatchCons (_, e, nil, _, Widen (Scope cons)) ->
+        (wild_closed e) && (wild_closed nil) && (wild_closed cons)
+    | TypeAbs (Scope body) | SensAbs (Scope body) -> wild_closed body
+    | TypeApp (tm, _) | SensApp (tm, _) -> wild_closed tm
+    | Wild _ -> false
+    | Nat (Succ tm) -> wild_closed tm
+    | ConsList (Cons (hd, tl)) -> (wild_closed hd) && (wild_closed tl)
+    | Pair (l, r) -> (wild_closed l) && (wild_closed r)
+    | Bag ts -> ts |> CCList.for_all wild_closed
+    | Fix (_, Scope body) -> wild_closed body
+    | Do tm | Return tm -> wild_closed tm
+    | LetDraw (_, dist, Scope usage) -> (wild_closed dist) && (wild_closed usage)
+    | _ -> true
 
 (* ease of construction *)
 module Alt = struct
     (* wrapping simple constructions *)
     let var : string -> t = fun s -> Var (Free (Name.of_string s))
+
+    let bool : bool -> t = function
+        | true -> Bool True
+        | false -> Bool False
+
+    let real : float -> t = fun f -> Real f
+
+    let discrete : string -> t = fun s -> Discrete s
 
     let rec nat : int -> t = fun n -> match n with
         | 0 -> Nat (Zero)
@@ -514,10 +685,15 @@ module Alt = struct
         | Var (Free n) -> Abs (Dtype.Base "test", abstract (N.of_one n) body)
         | _ -> v
 
+    let app (l : t) (r : t) : t = App (l, r)
+    let (<!>) = app
+
     let match_nat (e : t) (zero : t) (sp : t * t) : t = match sp with
         | (Var (Free n), succ) ->
             MatchNat (e, zero, Sensitivity.Free (Name.of_string "i"), abstract (N.of_one n) succ)
         | _ -> e
-end
 
-type vterm = t
+    let row : (string * vterm) list -> t = fun ps ->
+        let convert (k, v) = Pair (Discrete k, v) in
+        Bag (CCList.map convert ps)
+end

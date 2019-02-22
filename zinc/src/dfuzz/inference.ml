@@ -81,6 +81,47 @@ module Sub = struct
   and apply_sc (sub : t) : Fterm.scope -> Fterm.scope = function
     | Fterm.Sc tm -> Fterm.Sc (apply_fterm sub tm)
 
+  (* vterm application *)
+  let rec apply_vterm (sub : t) (tm : Vterm.t) : Vterm.t = let open Vterm in match tm with
+    | Abs (dt, Scope body) -> Abs (apply sub dt, Scope (apply_vterm sub body))
+    | App (l, r) -> App (apply_vterm sub l, apply_vterm sub r)
+
+    | MatchNat (e, zero, i, Scope succ) ->
+      let e' = apply_vterm sub e in
+      let zero' = apply_vterm sub zero in
+      let succ' = apply_vterm sub succ in
+        MatchNat (e', zero', i, Scope succ')
+    | MatchCons (dt, e, nil, i, Widen (Scope cons)) ->
+      let e' = apply_vterm sub e in
+      let nil' = apply_vterm sub nil in
+      let cons' = apply_vterm sub cons in
+        MatchCons (apply sub dt, e', nil', i, Widen (Scope cons'))
+    
+    | TypeAbs (Scope body) -> TypeAbs (Scope (apply_vterm sub body))
+    | TypeApp (tm, dt) -> TypeApp (apply_vterm sub tm, apply sub dt)
+    | SensAbs (Scope body) -> SensAbs (Scope (apply_vterm sub body))
+    | SensApp (tm, s) -> SensApp (apply_vterm sub tm, s)
+
+    | Wild (c, dt, Scope body) ->
+      Wild (c, apply sub dt, Scope (apply_vterm sub body))
+    
+    | Nat (Succ tm) -> Nat (Succ (apply_vterm sub tm))
+    | ConsList (Cons (hd, tl)) ->
+      let hd' = apply_vterm sub hd in
+      let tl' = apply_vterm sub tl in
+        ConsList (Cons (hd', tl'))
+    | Pair (l, r) -> Pair (apply_vterm sub l, apply_vterm sub r)
+    | Bag ts -> Bag (CCList.map (apply_vterm sub) ts)
+
+    | Fix (dt, Scope body) -> Fix (apply sub dt, Scope (apply_vterm sub body))
+
+    | Do tm -> Do (apply_vterm sub tm)
+    | Return tm -> Return (apply_vterm sub tm)
+    | LetDraw (dt, dist, Scope usage) ->
+      LetDraw (apply sub dt, apply_vterm sub dist, Scope (apply_vterm sub usage))
+
+    | _ -> tm
+
   (* there's a very natural notion of a join over two subs *)
 
   let join (l : t) (r : t) : t option =

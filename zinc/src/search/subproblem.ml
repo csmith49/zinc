@@ -1,10 +1,39 @@
 type t = {
-  root : Name.t;
-  obligation : Constraint.t;
-  hole : Fterm.Zipper.t;
-  context : Context.t;
-  goal : Dtype.t;
+    root : Name.t;
+    obligation : Constraint.t;
+    hole : Zipper.t;
+    context : Context.t;
+    goal : Dtype.t;
 }
+
+open Name.Alt
+
+let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
+    | Vterm.Wild (context, dt, body) ->
+        let w = Vterm.Var (Vterm.Free (root <+ "w")) in
+        let body = Vterm.instantiate (Vterm.N.of_one w) body in
+        let zipper = Zipper.preorder_until root "x" (fun t -> t = w) (Zipper.of_term body) in
+        begin match zipper with
+            | Some z -> {
+                root = root <+ "node";
+                obligation = n.Node.obligation;
+                hole = z;
+                context = context;
+                goal = dt;
+            }
+            | _ -> failwith "can't construct subproblem without bound wildcard"
+        end
+    | _ -> failwith "can't construct subproblem without top-level wildcard"
+
+let rec variable_proposals (subprob : t) : Proposal.t list =
+    let f = fun (n, dt) -> {
+        Proposal.solution = Vterm.Var (Vterm.Free n);
+        dtype = dt;
+        wildcards = [];
+        context = Context.concrete_of_var n;
+        obligation = Constraint.Top;
+    } in let variables = Zipper.scope subprob.hole in
+        CCList.map f variables
 
 (* utility syntax stuff *)
 open Name.Alt
@@ -14,11 +43,11 @@ open Constraint.Alt
 
 (* nodes can be instantiated into several subproblems, we just pick the first bound *)
 let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
-  | Fterm.Wild (context, dom, body) ->
+  | Vterm.Wild (context, dom, body) ->
     let w = root <+ "w" in
-    let wildcard = Fterm.Free w in
-    let body' = Fterm.instantiate wildcard body in
-    let zipper = Fterm.Zipper.preorder_until root "x" (fun t -> t = wildcard) (Fterm.Zipper.of_term body') in
+    let wildcard = Vterm.Var (Vterm.Free w) in
+    let body' = Vterm.instantiate_one wildcard body in
+    let zipper = Zipper.preorder_until root "x" (fun t -> t = wildcard) (Zipper.of_term body') in
     begin match zipper with
       | Some z -> {
         root = root <+ "node";
@@ -35,18 +64,12 @@ let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
 let rec variable_proposals (sp : t) : Proposal.t list =
   let f = fun (n, dt) -> 
     {
-      Proposal.solution = Fterm.Free n;
+      Proposal.solution = Vterm.Var (Vterm.Free n);
       Proposal.dtype = dt;
       Proposal.wildcards = [];
       Proposal.context = Context.concrete_of_var n;
       Proposal.obligation = Constraint.Top;
-    } in CCList.map f (variables sp)
-and variables (sp : t) : (Name.t * Dtype.t) list = match sp.hole with
-  | (_, prefix, _) ->
-    let f = fun b -> match b with
-      | Fterm.Prefix.BAbs (tag, dt) -> Some (tag, dt)
-      | _ -> None
-    in CCList.filter_map f prefix
+    } in CCList.map f (Zipper.scope sp.hole)
 
 (* and of course, if we want a function we can certainly make one *)
 let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
@@ -54,9 +77,9 @@ let lambda_proposal (sp : t) : Proposal.t option = match sp.goal with
     let w = sp.root <+ "w" in
     let tag = sp.root <+ "x" in
     let context = Context.Symbolic (sp.root <+ "c") in
-    let wild_bindings = [Fterm.Prefix.BWild (w, context, codom)] in
+    let wild_bindings = [Zipper.ZWild (context, codom, w)] in
     Some {
-      Proposal.solution = Fterm.Abs (tag, dom, Fterm.Sc (Fterm.Free w));
+      Proposal.solution = Vterm.Abs (dom, Vterm.Scope (Vterm.Var (Vterm.Free w)));
       Proposal.dtype = sp.goal;
       Proposal.wildcards = wild_bindings;
       Proposal.context = context;
@@ -75,11 +98,14 @@ let insert_proposal (p : Proposal.t) (sp : t) : Node.t option =
         Node.root = sp.root;
         Node.obligation = phi & p.Proposal.obligation & sp.obligation;
         Node.solution =
-          Inference.Sub.apply_fterm 
+          let tm = Zipper.set p.Proposal.solution sp.hole |> Zipper.to_term in
+            Inference.Sub.apply_vterm sub (Zipper.to_term (tm, p.Proposal.wildcards))
+          (* Inference.Sub.apply_vterm 
             sub 
-            (Fterm.Prefix.bind 
-              p.Proposal.wildcards 
-              (Fterm.Zipper.to_term (Fterm.Zipper.set p.Proposal.solution sp.hole)));
+            (Zipper.to_term 
+              (Zipper.to_term (Zipper.set p.Proposal.solution sp.hole)),
+              p.Proposal.wildcards)
+            ); *)
       }
     | None -> None
 
@@ -90,11 +116,11 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let c = Context.Symbolic (root <+ "c") in
       let c_wild = Context.Symbolic (root <+ "c_wild") in
       let w = root <+ "wild" in
-      let binding = Fterm.Prefix.BWild (w, c_wild, dom) in
+      let binding = Zipper.ZWild (c_wild, dom, w) in
       let f = prop.Proposal.solution in
       (* construct recursive call *)
       let p = {
-        Proposal.solution = Fterm.App (f, Fterm.Free w);
+        Proposal.solution = Vterm.App (f, Vterm.Var (Vterm.Free w));
         Proposal.dtype = codom;
         Proposal.wildcards = binding :: prop.Proposal.wildcards;
         Proposal.context = c;
@@ -107,7 +133,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let a = root <+ "type" in
       let f = prop.Proposal.solution in
       let p = {
-        Proposal.solution = Fterm.TyApp (f, Dtype.Free a);
+        Proposal.solution = Vterm.TypeApp (f, Dtype.Free a);
         Proposal.dtype = Dtype.instantiate (Dtype.Free a) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;
@@ -119,7 +145,7 @@ let rec specialize (root : Name.t) (prop : Proposal.t) (context : Context.t) : P
       let s = root <+ "sens" in
       let f = prop.Proposal.solution in
       let p = {
-        Proposal.solution = Fterm.SensApp (f, Sensitivity.Free s);
+        Proposal.solution = Vterm.SensApp (f, Sensitivity.Free s);
         Proposal.dtype = Dtype.instantiate_sens (Sensitivity.Free s) body;
         Proposal.wildcards = prop.Proposal.wildcards;
         Proposal.context = c;

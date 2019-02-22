@@ -12,12 +12,12 @@ let student_01 = {
   budget = 1;
   grammar = student_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 17 "reputation" 4 2 "rural" false 3 10;
       Signature.Student.make 17 "reputation" 4 3 "rural" false 3 10;
       Signature.Student.make 17 "reputation" 4 2 "rural" true 3 10;
       Signature.Student.make 17 "reputation" 4 4 "rural" true 3 10;
-    ], Value.Real 1.0)
+    ], Vterm.Real 1.0)
   ]
 }
 
@@ -28,11 +28,11 @@ let student_02 = {
   budget = 20;
   grammar = student_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 4 2 "rural" false 3 10;
       Signature.Student.make 20 "reputation" 4 3 "urban" true 2 0;
       Signature.Student.make 16 "proximity" 0 0 "rural" false 5 0;
-    ], Value.Real 15.0)
+    ], Vterm.Real 15.0)
   ]
 }
 
@@ -43,17 +43,17 @@ let student_03 = {
   name = "student_03";
   mechanism = Partition (
     Signature.Student.address_type_t, 
-    [Value.Discrete "rural"; Value.Discrete "urban"]);
+    [Vterm.Discrete "rural"; Vterm.Discrete "urban"]);
   budget = 5;
   grammar = student_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 3 10;
       Signature.Student.make 20 "reputation" 0 0 "rural" true 2 0;
       Signature.Student.make 17 "proximity" 4 3 "urban" true 5 3;
-    ], Value.Bag [
-      Value.Pair (Value.Discrete "rural", Value.Real 2.5);
-      Value.Pair (Value.Discrete "urban", Value.Real 4.0);
+    ], Vterm.Bag [
+      Vterm.Pair (Vterm.Discrete "rural", Vterm.Real 2.5);
+      Vterm.Pair (Vterm.Discrete "urban", Vterm.Real 4.0);
     ])
   ];
 }
@@ -64,20 +64,20 @@ let student_04 = {
   name = "student_04";
   mechanism = Exponential (
     Signature.Student.family_t, 
-    [Value.Real 1.0; Value.Real 2.0; Value.Real 3.0; Value.Real 4.0; Value.Real 5.0]);
+    [Vterm.Real 1.0; Vterm.Real 2.0; Vterm.Real 3.0; Vterm.Real 4.0; Vterm.Real 5.0]);
   budget = 20;
   grammar = student_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 3 10;
       Signature.Student.make 20 "reputation" 0 0 "rural" true 3 0;
       Signature.Student.make 9 "proximity" 4 3 "urban" true 5 3;
-    ], Value.Real 3.0);
-    (Value.Bag [
+    ], Vterm.Real 3.0);
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 3 10;
       Signature.Student.make 18 "reputation" 0 0 "rural" true 3 0;
       Signature.Student.make 20 "proximity" 4 3 "urban" true 5 3;
-    ], Value.Real 5.0)
+    ], Vterm.Real 5.0)
   ]
 }
 
@@ -88,11 +88,11 @@ let student_05 = {
   budget = 100;
   grammar = student_sig;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 1 50;
       Signature.Student.make 20 "reputation" 0 5 "rural" true 2 50;
       Signature.Student.make 17 "reputation" 4 3 "rural" true 1 3;
-    ], Value.Real 20.0)
+    ], Vterm.Real 20.0)
   ]
 }
 
@@ -101,17 +101,17 @@ let student_06 = {
   name = "student_06";
   mechanism = Partition (
     Signature.Student.reason_t,
-    [Value.Discrete "reputation"; Value.Discrete "proximity"]);
+    [Vterm.Discrete "reputation"; Vterm.Discrete "proximity"]);
   budget = 100;
   grammar = student_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 20 "reputation" 0 0 "rural" true 2 10;
       Signature.Student.make 20 "reputation" 0 0 "rural" true 2 1;
       Signature.Student.make 17 "proximity" 4 3 "urban" true 5 3;
-    ], Value.Bag [
-      Value.Pair (Value.Discrete "reputation", Value.Real 11.0);
-      Value.Pair (Value.Discrete "proximity", Value.Real 3.0);
+    ], Vterm.Bag [
+      Vterm.Pair (Vterm.Discrete "reputation", Vterm.Real 11.0);
+      Vterm.Pair (Vterm.Discrete "proximity", Vterm.Real 3.0);
     ])
   ];
 }
@@ -121,20 +121,20 @@ let student_07 = {
   name = "student_07";
   mechanism = Exponential (
     Signature.Student.address_type_t, 
-    [Value.Discrete "rural"; Value.Discrete "urban";]);
+    [Vterm.Discrete "rural"; Vterm.Discrete "urban";]);
   budget = 5;
   grammar = student_sig @ Signature.Database.signature;
   examples = [
-    (Value.Bag [
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 2 10;
       Signature.Student.make 20 "reputation" 0 0 "rural" true 2 0;
       Signature.Student.make 9 "proximity" 4 3 "urban" true 0 3;
-    ], Value.Discrete "rural");
-    (Value.Bag [
+    ], Vterm.Discrete "rural");
+    (Vterm.Bag [
       Signature.Student.make 10 "reputation" 5 5 "rural" false 7 10;
       Signature.Student.make 18 "reputation" 0 0 "rural" true 7 0;
       Signature.Student.make 20 "proximity" 4 3 "urban" true 1 3;
-      ], Value.Discrete "urban")
+      ], Vterm.Discrete "urban")
   ]
 }
 

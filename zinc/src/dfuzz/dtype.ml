@@ -9,6 +9,7 @@ type t =
   | Base of base
   | Bounded of bounded
   | Monad of t
+  | Bag of t
 and precise =
   | Natural of Sensitivity.t
   | Real of Sensitivity.t
@@ -45,6 +46,7 @@ and abstract' (n : Name.t) (db : int) (dt : t) : t = match dt with
       | MSet (s, dt') -> Bounded (MSet (Sensitivity.abstract' n db s, abstract' n db dt'))
     end
   | Monad dt -> Monad (abstract' n db dt)
+  | Bag dt -> Bag (abstract' n db dt)
   | _ -> dt (* catches Base and Bound case *)
 
 let rec instantiate (img : t) (s : scope) : t = match s with
@@ -65,6 +67,7 @@ and instantiate' (img : t) (db : int) (dt : t) : t = match dt with
     end
   | Tensor (l, r) -> Tensor (instantiate' img db l, instantiate' img db r)
   | Monad dt -> Monad (instantiate' img db dt)
+  | Bag dt -> Bag (instantiate' img db dt)
   | _ -> dt
 
 let rec instantiate_sens (img : Sensitivity.t) (s : scope) : t = match s with
@@ -88,6 +91,7 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (dt : t) : t = match dt w
       | MSet (s, dt') -> Bounded (MSet (Sensitivity.instantiate' img db s, instantiate_sens' img db dt'))
     end
   | Monad dt -> Monad (instantiate_sens' img db dt)
+  | Bag dt -> Bag (instantiate_sens' img db dt)
   | _ -> dt
 
 (* submodules will want to refer to this type *)
@@ -166,6 +170,9 @@ and to_string' (dt : t) (s : Name.Stream.t) : string * Name.Stream.t = match dt 
   | Monad p ->
     let p', s' = to_string' p s in
     ("O " ^ p', s')
+  | Bag p ->
+    let p', s' = to_string' p s in
+    ("Bag(" ^ p' ^ ")", s')
 
 and quantifier_to_string : quantifier -> string = function
   | Exists -> "∃"
@@ -187,6 +194,7 @@ let rec free_vars : t -> Name.t list = function
       | MSet (s, dt) -> (free_vars dt) @ (Sensitivity.free_vars s)
     end
   | Monad p -> free_vars p
+  | Bag p -> free_vars p
   | _ -> []
 
 (* the real reason we care about alternative syntax is to make it easier to write these types in the benchmarks *)

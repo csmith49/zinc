@@ -51,7 +51,8 @@ let bm_print : bool = !verbosity >= 3
 
 let string_of_fterm : Fterm.t -> string = if !dont_annotate then Fterm.to_clean_string else Fterm.to_string
 
-let weights : Node.Vector.weight = (!p_weight_1, !p_weight_2, !p_weight_3, !p_weight_4)
+let weights : Node.Vector.four Node.Vector.coefficients = 
+  Node.Vector.of_four !p_weight_1 !p_weight_2 !p_weight_3 !p_weight_4
 
 let _ = if normal_print then print_endline ("Evaluating benchmark: " ^ !benchmark_name) else ()
 
@@ -93,7 +94,7 @@ let synthesize (bm : Benchmark.t) : unit =
 
   (* generate start node and initialize frontier *)
   let start_node = Benchmark.to_node bm in
-  let _ = frontier := Frontier.push !frontier weights start_node in
+  let _ = frontier := Frontier.push weights !frontier start_node in
   let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Benchmark.grammar in
   
   (* repeatedly pull nodes and check for satisfiability *)
@@ -107,7 +108,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let start_time = Sys.time () in
 
     (* PRINTING *)
-    let _ = if normal_print then print_endline ("Checking: " ^ (string_of_fterm tm)) else () in
+    let _ = if normal_print then print_endline ("Checking: " ^ (Vterm.to_string tm)) else () in
     let _ = if more_print then 
       print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) else () in
     let _ = if !pause then (let _ = read_line () in ()) else () in
@@ -128,7 +129,7 @@ let synthesize (bm : Benchmark.t) : unit =
       let _ = if more_print then print_endline ("    Satisfiable!") else () in
 
       (* check if tm is a solution *)
-      if (Fterm.wild_closed tm) then
+      if (Vterm.wild_closed tm) then
         let meets_examples = 
           try Benchmark.verify tm bm 
           with _ -> false
@@ -159,7 +160,7 @@ let synthesize (bm : Benchmark.t) : unit =
           (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
         let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 
-          frontier := Frontier.push !frontier weights n) steps in
+          frontier := Frontier.push weights !frontier n) steps in
         if bm_print then print_endline "done." else ()
     else
       if more_print then print_endline ("    Unsatisfiable.\n") else ()
@@ -176,7 +177,7 @@ let synthesize (bm : Benchmark.t) : unit =
 (* run the experiment, and catch the output *)
 try synthesize benchmark with
   | SynthSuccess node -> 
-    let _ = print_endline ("Solution found: " ^ (string_of_fterm node.Node.solution)) in
+    let _ = print_endline ("Solution found: " ^ (Vterm.to_string node.Node.solution)) in
     let _ = if !counting then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
@@ -185,7 +186,7 @@ try synthesize benchmark with
                            |> Simplify.simplify
     in 
     let _ = if !obligation then Simplify.print_constraints obs else () in
-    let _ = if !sizing then print_endline ("Solution size: " ^ (node.Node.solution |> Fterm.size |> string_of_int)) else () in
+    let _ = if !sizing then print_endline ("Solution size: " ^ (node.Node.solution |> Vterm.size |> string_of_int)) else () in
     let _ = if !sizing then print_endline ("Obligation size: " ^ (obs |> CCList.length |> string_of_int)) else ()
     in ()
  

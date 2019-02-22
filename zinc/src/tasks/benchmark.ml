@@ -2,8 +2,8 @@
 (* as well as a population of that type *)
 type mechanism =
   | Laplace
-  | Exponential of Dtype.t * (Value.t list)
-  | Partition of Dtype.t * (Value.t list)
+  | Exponential of Dtype.t * (Vterm.t list)
+  | Partition of Dtype.t * (Vterm.t list)
 
 (* benchmarks maintain a list of all the info we need to test synthesis *)
 type t = {
@@ -11,7 +11,7 @@ type t = {
   budget : int;
   mechanism : mechanism;
   grammar : Primitive.t list;
-  examples : (Value.t * Value.t) list;
+  examples : (Vterm.t * Vterm.t) list;
 }
 
 open Make
@@ -19,10 +19,10 @@ open Name.Alt
 
 (* goal type depends on the mechanism being used *)
 let goal_type : t -> Dtype.t = fun bm -> match bm.mechanism with
-  | Laplace -> modal (k, mset (row, infinity)) -* real
-  | Exponential (a, _) -> modal (k, mset (row, infinity)) -* (a => real)
+  | Laplace -> modal (k, mset (row a, infinity)) -* real
+  | Exponential (a, _) -> modal (k, mset (row a, infinity)) -* (a => real)
   | Partition (a, _) -> 
-    mset (a, infinity) => (modal (k, mset (row, infinity)) -* mset (pair (a, real), infinity))
+    mset (a, infinity) => (modal (k, mset (row a, infinity)) -* mset (pair (a, real), infinity))
 
 (* eventually, we have to convert it into a node *)
 let to_node : t -> Node.t = fun bm -> {
@@ -39,7 +39,7 @@ let to_node : t -> Node.t = fun bm -> {
     let context = Context.Empty in
     let root = Name.of_string bm.name in
     let w = root <+ "wild" in
-      Fterm.Wild (context, goal_type bm, Fterm.abstract w (Fterm.Free w))
+      Vterm.Wild (context, goal_type bm, Vterm.abstract_one w (Vterm.Var (Vterm.Free w)))
   end;
 }
 
@@ -51,6 +51,28 @@ let apply_binary (tm : Fterm.t) (one : Value.t) (two : Value.t) =
     Fterm.eval (Fterm.App (curried, Fterm.Const two))
 
 (* just makes sure the inputs and outputs match up *)
+let verify_laplace (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) : bool =
+  let check_pair = fun (i, o) ->
+    let output = o |> Vterm.eval in
+    let input = Vterm.App (tm, i) |> Vterm.eval in
+      output = input
+  in CCList.for_all check_pair io
+
+let verify_exponential (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) (pop : Vterm.t list) : bool =
+  let open Vterm.Alt in
+  let check_pair = fun (i, o) ->
+    let score = tm <!> i <!> o |> Vterm.eval in CCList.for_all (fun p ->
+      p = o || Vterm.Evaluation.real_geq score (tm <!> i <!> p |> Vterm.eval)) pop in
+  CCList.for_all check_pair io
+
+let verify_partition (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) (keys : Vterm.t list) : bool =
+  let open Vterm.Alt in
+  let check_pair = fun (i, o) ->
+    let output = o |> Vterm.eval in
+    let input = (tm <!> (Vterm.Bag keys) <!> i) |> Vterm.eval in
+      output = input
+    in CCList.for_all check_pair io
+(* 
 let verify_laplace (tm : Fterm.t) (io : (Value.t * Value.t) list) : bool =
   let check_pair = fun (i, o) -> o = (apply tm i)
   in CCList.for_all check_pair io
@@ -66,10 +88,10 @@ let verify_exponential (tm : Fterm.t) (io : (Value.t * Value.t) list) (pop : Val
 
 let verify_partition (tm : Fterm.t) (io : (Value.t * Value.t) list) (keys : Value.t list): bool =
   let check_pair = fun (i, o) -> o = (apply_binary tm (Value.Bag keys) i)
-  in CCList.for_all check_pair io
+  in CCList.for_all check_pair io *)
 
 (* putting it together is straightforward now *)
-let verify (tm : Fterm.t) (bm : t) : bool = match bm.mechanism with
+let verify (tm : Vterm.t) (bm : t) : bool = match bm.mechanism with
   | Laplace -> verify_laplace tm bm.examples
   | Exponential (_, pop) -> verify_exponential tm bm.examples pop
   | Partition (_, keys) -> verify_partition tm bm.examples keys

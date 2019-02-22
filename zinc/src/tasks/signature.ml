@@ -1,4 +1,7 @@
 open Make
+open Vterm.Evaluation.Infix
+
+(* utilities for making functions easier *)
 
 (* we have some utility functions for treating values a little more cleanly *)
 let binarize (f : Value.abstraction) = fun x -> fun y -> match (f x) with
@@ -18,42 +21,45 @@ type t = Primitive.t list
 module Basic = struct
   let succ = {
     Primitive.name = "succ";
-    Primitive.dtype = modal (one, real) -* real;
-    Primitive.source = Value.F (fun v -> match v with
-        | Value.Real r -> Value.Real (r +. 1.0)
-        | _ -> failwith "can't eval on this type")
+    dtype = modal (one, real) -* real;
+    source = Vterm.Function ("succ",
+      let f i = i +. 1.0 in
+      fun v -> v |> Vterm.eval |> Vterm.Evaluation.real_map f)
   }
 
   let square = {
     Primitive.name = "square";
-    Primitive.dtype = real => real;
-    Primitive.source = Value.F (fun v -> match v with
-        | Value.Real r -> Value.Real (r *. r)
-        | _ -> failwith "can't eval on this type")
+    dtype = real => real;
+    source = Vterm.Function ("square",
+      let f i = i *. i in
+      fun v -> v |> Vterm.eval |> Vterm.Evaluation.real_map f)
   }
 
   let double = {
     Primitive.name = "double";
-    Primitive.dtype = modal (two, real) -* real;
-    Primitive.source = Value.F (fun v -> match v with
-        | Value.Real r -> Value.Real (r *. 2.0)
-        | _ -> failwith "can't eval on this type")
+    dtype = modal (two, real) -* real;
+    source = Vterm.Function ("double",
+      let f i = i +. i in
+      fun v -> v |> Vterm.eval |> Vterm.Evaluation.real_map f)
   }
-
+    
   let cast_int = {
     Primitive.name = "cast";
-    Primitive.dtype = modal (one, int) -* real;
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.Int i -> Value.Real (float_of_int i)
-      | _ -> failwith "can't cast a non-int");
+    dtype = modal (one, int) -* real;
+    source = Vterm.Function ("cast",
+      fun v -> let open Vterm.Alt in
+        let f = var "cast_func" in
+        let x = var "cast_var" in
+        let tm = fix f (match_nat v (nat 0) (x, app succ.source x)) in
+          Vterm.eval tm)
   }
 
   let big = {
     Primitive.name = "big";
-    Primitive.dtype = real => bool;
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r >= 10.0)
-      | _ -> failwith "can't check if a non-real is big");
+    dtype = real => bool;
+    source = Vterm.Function ("big",
+      let pred i = i >= 10.0 in
+      fun v -> v |> Vterm.eval |> Vterm.Evaluation.real_filter pred)
   }
 
   let signature = [succ; square; double; cast_int; big]
@@ -63,47 +69,32 @@ end
 module MapReduce = struct
   let filter = {
     Primitive.name = "filter";
-    Primitive.dtype = 
+    dtype = 
       tbind (a, sbind (n,
-        modal (n, a => bool) -* (modal (one, mset (a, n)) -* mset (a, infinity))
+        modal (infinity, a => bool) -* (modal (one, mset (a, n)) -* mset (a, n))
       ));
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.F p -> Value.F (fun v -> match v with
-        | Value.Bag ts -> Value.Bag (CCList.filter (fun b -> (p b) = (Value.Bool true)) ts)
-        | _ -> failwith "can't apply filter to a non-bag")
-      | _ -> failwith "can't apply a non-function predicate");
+    source = Vterm.Function ("filter", fun pred ->
+      Vterm.Value ( Vterm.Function ("filter pred", fun mset ->
+        let pred' tm = Vterm.App (pred, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+        match Vterm.eval mset with
+          | Value (Vterm.Bag ts) -> ts |> CCList.filter pred' |> (fun v -> Vterm.Bag v) |> Vterm.Evaluation.return
+          | _ -> Vterm.Diverge
+      )))
   }
 
   let map = {
     Primitive.name = "map";
-    Primitive.dtype =
+    dtype =
       (* is this actually the right type? what's the sensitivity on the mset input? *)
       tbind (a, tbind (b, sbind (s, sbind (n, 
         modal (n, modal (s, a) -* b) -* (modal (one, mset (a, n)) -* mset (b, n))
       ))));
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.F f -> Value.F (fun v -> match v with
-        | Value.Bag ts -> Value.Bag (CCList.map f ts)
-        | _ -> failwith "can't apply map to a non-bag")
-      | _ -> failwith "can't apply a non-function mapper");
+    source = Vterm.Function ("map", fun f ->
+      Vterm.Value (Vterm.Function ("map f", fun mset ->
+        let eval_f tm = Vterm.App (f, tm) |> Vterm.eval in
+          Vterm.eval mset |> Vterm.Evaluation.bag_map eval_f
+    )))
   }
-
-  (* let reduce = {
-    Primitive.name = "reduce";
-    Primitive.dtype = 
-      sbind (s, sbind (n, sbind (k,
-        modal (n, modal (s, real) -* (modal (s, real) -* real)) -* (modal (s, mset (bounded k, n)) -* real)
-      )));
-    Primitive.source = Value.F (fun v -> match v with
-      | Value.F f -> Value.F (fun v -> match v with
-        | Value.Bag ts -> begin match ts with
-          | [] -> Value.Real 0.0
-          | _ -> CCList.fold_left (binarize f) (Value.Real 0.0) ts
-        end
-        | _ -> failwith "can't apply reduce to a non-bag")
-      | _ -> failwith "can't apply a non-function reducer"
-    );
-  } *)
 
   let signature = [filter; map]
 end
@@ -113,30 +104,44 @@ module Aggregate = struct
   let count = {
     Primitive.name = "count";
     dtype = tbind (a, sbind (n, modal (one, mset (a, n)) -* real));
-    source = Value.F (fun v -> match v with
-      | Value.Bag ts -> Value.Real (float_of_int (CCList.length ts))
-      | _ -> failwith "can't count a non-bag");
+    source = Vterm.Function ("count", fun v -> match Vterm.eval v with
+      | Vterm.Value (Vterm.Bag ts) -> Vterm.Value (Vterm.Real (float_of_int (CCList.length ts)))
+      | _ -> Vterm.Diverge)
   }
 
   let sum = {
     Primitive.name = "sum";
     dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
-    source = Value.F (fun v -> match v with
-      | Value.Bag ts -> Value.Real (CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts))
-      | _ -> failwith "can't sum a non-bag");
+    source = Vterm.Function ("sum", fun mset -> match Vterm.eval mset with
+      | Vterm.Value (Vterm.Bag ts) -> 
+        let reals = ts 
+          |> CCList.map Vterm.Evaluation.return
+          |> CCList.map Vterm.Evaluation.to_real
+          |> CCOpt.sequence_l in
+        begin match reals |> CCOpt.map (CCList.fold_left (+.) 0.0) with
+          | Some f -> Vterm.Evaluation.of_real f
+          | _ -> Diverge
+        end
+      | _ -> Diverge
+    )
   }
 
   let average = {
     Primitive.name = "average";
     dtype = sbind (n, sbind (s, modal (s, mset (bounded s, n)) -* real));
-    source = Value.F (fun v -> match v with
-      | Value.Bag ts -> begin match ts with
-        | [] -> Value.Real 0.0
-        | _ ->
-        let total = CCList.fold_left (+.) 0.0 (CCList.map unpack_real ts) in
-        let count = float_of_int (CCList.length ts) in
-          Value.Real (total /. count) end
-      | _ -> failwith "can't average a non-bag");
+    source = Vterm.Function ("sum", fun mset -> match Vterm.eval mset with
+      | Vterm.Value (Vterm.Bag ts) -> 
+        let reals = ts 
+          |> CCList.map Vterm.Evaluation.return
+          |> CCList.map Vterm.Evaluation.to_real
+          |> CCOpt.sequence_l in
+        let count = CCList.length ts |> float_of_int in
+        begin match reals |> CCOpt.map (CCList.fold_left (+.) 0.0) with
+          | Some f -> Vterm.Evaluation.of_real (f /. count)
+          | _ -> Diverge
+        end
+      | _ -> Diverge
+    )
   }
 
   let signature = [sum; average; count]
@@ -144,27 +149,18 @@ end
 
 (* combinatorics for defining predicates *)
 module Predicate = struct
-  (* some simple helpers *)
-  let value_and (l : Value.t) (r : Value.t) : Value.t = match l, r with
-    | Value.Bool p, Value.Bool q -> Value.Bool (p && q)
-    | _ -> failwith "can't and non-bools"
-  let value_or (l : Value.t) (r : Value.t) : Value.t = match l, r with
-    | Value.Bool p, Value.Bool q -> Value.Bool (p && q)
-    | _ -> failwith "can't or non-bools"
-  let value_not (b : Value.t) : Value.t = match b with
-    | Value.Bool b -> Value.Bool (not b)
-    | _ -> failwith "can't not non-bools"
-
   let pred_and = {
     Primitive.name = "and";
     dtype = tbind (a, 
       (a => bool) => ((a => bool) => (a => bool))
     );
-    source = Value.F (fun v -> match v with
-      | Value.F p1 -> Value.F (fun v -> match v with
-        | Value.F p2 -> Value.F (fun a -> value_and (p1 a) (p2 a))
-        | _ -> failwith "not a func")
-      | _ -> failwith "not a func");
+    source = Vterm.Function ("and", fun pred1 ->
+      Vterm.Value (Vterm.Function ("and pred", fun pred2 ->
+        Vterm.Value (Vterm.Function ("result", fun tm ->
+          let p1 = Vterm.App (pred1, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+          let p2 = Vterm.App (pred2, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+            Vterm.Evaluation.of_bool (p1 && p2)
+    )))))
   }
 
   let pred_or = {
@@ -172,11 +168,13 @@ module Predicate = struct
     dtype = tbind (a, 
       (a => bool) => ((a => bool) => (a => bool))
     );
-    source = Value.F (fun v -> match v with
-      | Value.F p1 -> Value.F (fun v -> match v with
-        | Value.F p2 -> Value.F (fun a -> value_or (p1 a) (p2 a))
-        | _ -> failwith "not a func")
-      | _ -> failwith "not a func");
+    source = Vterm.Function ("and", fun pred1 ->
+      Vterm.Value (Vterm.Function ("and pred", fun pred2 ->
+        Vterm.Value (Vterm.Function ("result", fun tm ->
+          let p1 = Vterm.App (pred1, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+          let p2 = Vterm.App (pred2, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+            Vterm.Evaluation.of_bool (p1 || p2)
+    )))))
   }
 
   let pred_not = {
@@ -184,9 +182,11 @@ module Predicate = struct
     dtype = tbind (a,
       (a => bool) => (a => bool)
     );
-    source = Value.F (fun v -> match v with
-      | Value.F p -> Value.F (fun v -> value_not (p v))
-      | _ -> failwith "not a func");
+    source = Vterm.Function ("not", fun pred ->
+      Vterm.Value (Vterm.Function ("result", fun tm ->
+        let p = Vterm.App (pred, tm) |> Vterm.eval |> Vterm.Evaluation.is_true in
+          Vterm.Evaluation.of_bool (not p)
+      )))
   }
 
   let signature = [pred_and; pred_or; pred_not]
@@ -196,12 +196,12 @@ module Constants = struct
   let value_true = {
     Primitive.name = "true";
     dtype = bool;
-    source = Value.Bool true
+    source = Vterm.Bool Vterm.True;
   }
   let value_false = {
     Primitive.name = "false";
     dtype = bool;
-    source = Value.Bool false;
+    source = Vterm.Bool Vterm.False;
   }
 
   let signature = [value_true; value_false]
@@ -210,15 +210,19 @@ end
 module Database = struct
   let compare_with = {
     Primitive.name = "compare_with";
-    dtype = tbind (a, sbind (s,
-      modal (s, row => a) -* (a => (modal (one, mset (row, s)) -* mset (row, infinity)))
-    ));
-    source = Value.F (fun v -> match v with
-      | Value.F project -> Value.F (fun c -> Value.F (
-        fun v -> match v with
-          | Value.Bag ts -> Value.Bag (CCList.filter (fun row -> (project row) = c) ts)
-          | _ -> failwith "not a bag"))
-      | _ -> failwith "not a function");
+    dtype = tbind (a, tbind (b, sbind (s,
+      modal (s, (row b) => a) -* (a => (modal (one, mset ((row b), s)) -* mset ((row b), infinity)))
+    )));
+    source = Vterm.Function ("cw", fun project ->
+      Vterm.Value (Vterm.Function ("cw p", fun constant ->
+        Vterm.Value (Vterm.Function ("cw p c", fun v ->
+          let pred = Vterm.Function ("pred", fun row ->
+            let p = Vterm.App (project, row) |> Vterm.eval in
+            let c = Vterm.eval constant in
+              Vterm.Evaluation.of_bool (p = c)) in
+          let open Vterm.Alt in
+            (MapReduce.filter.Primitive.source <!> pred <!> v) |> Vterm.eval
+    )))))
   }
 
   let partition = {
@@ -232,16 +236,15 @@ module Database = struct
         ) 
       )
     ))));
-    source = Value.F (fun v -> match v with
-      | Value.Bag keys -> Value.F (fun v -> match v with
-        | Value.F project -> Value.F (fun v -> match v with
-          | Value.Bag xs -> Value.Bag (
-            CCList.map (fun k ->
-              Value.Pair (k, Value.Bag (CCList.filter (fun v -> (project v) = k) xs))
-            ) keys)
-          | _ -> failwith "not a bag")
-        | _ -> failwith "not a projection")
-      | _ -> failwith "not a set of keys");
+    source = Vterm.Function ("partition", fun keys ->
+      Vterm.Value (Vterm.Function ("partition keys", fun project ->
+        Vterm.Value (Vterm.Function ("partition keys project", fun mset ->
+          let p key = let open Vterm.Alt in
+            let elts = compare_with.Primitive.source <!> project <!> key <!> mset in
+            let pair = Vterm.Pair (key, elts) in
+              pair |> Vterm.eval
+          in Vterm.Evaluation.bag_map p (Vterm.eval keys)
+        )))))
   }
 
   let group_map = {
@@ -249,13 +252,13 @@ module Database = struct
     dtype = tbind (a, tbind (b, tbind (c, sbind (s, sbind (n, 
       modal (one, mset (pair (a, b), n)) -* (modal (n, b => c) -* mset (pair (a, c), n))
     )))));
-    source = Value.F (fun v -> match v with
-      | Value.Bag xs -> Value.F (fun v -> match v with
-        | Value.F f -> Value.Bag (CCList.map (fun v -> match v with
-          | Value.Pair (k, v) -> Value.Pair (k, f v)
-          | _ -> failwith "not a pair") xs)
-        | _ -> failwith "not a function")
-      | _ -> failwith "not a bag");
+    source = Vterm.Function ("gm", fun mset ->
+      Vterm.Value (Vterm.Function ("gm bag", fun f ->
+        let mapper tm = match tm with
+          | Vterm.Pair (l, r) -> Vterm.Pair (l, Vterm.App (f, r)) |> Vterm.eval
+          | _ -> Vterm.Diverge in
+        Vterm.Evaluation.bag_map mapper (Vterm.eval mset)
+    )))
   }
 
   let signature = [partition; group_map; compare_with]
@@ -295,9 +298,9 @@ module Adult = struct
   let gt_40_hrs = {
     Primitive.name = "gt_40_hrs";
     dtype = hours_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r >= 40.0)
-      | _ -> failwith "not an hour");
+    source = Vterm.Function ("get_40", fun r ->
+      r |> Vterm.eval |> Vterm.Evaluation.real_filter (fun r -> r >= 40.0)
+    )
   }
 
   let is_female = discrete_check "is_female" "female" gender_t
@@ -314,16 +317,16 @@ module Adult = struct
   let signature = checks @ keys @ conversions
   
   (* and a utility for constructing examples *)
-  let make (gt : bool) (gender : string) (race : string) (hours : int) (education : int) (profession : string) (w_class : string) (cg : int) : Value.t =
-    Value.row_of_list [
-      ("gt_50k", Value.Bool gt);
-      ("gender", Value.Discrete gender);
-      ("race", Value.Discrete race);
-      ("work_hours", Value.Real (float_of_int hours));
-      ("education_level", Value.Real (float_of_int education));
-      ("profession", Value.Discrete profession);
-      ("work_class", Value.Discrete w_class);
-      ("capital_gains", Value.Real (float_of_int cg));
+  let make (gt : bool) (gender : string) (race : string) (hours : int) (education : int) (profession : string) (w_class : string) (cg : int) : Vterm.t =
+    let open Vterm.Alt in row [
+      ("gt_50k", bool gt);
+      ("gender", discrete gender);
+      ("race", discrete race);
+      ("work_hours", hours |> float_of_int |> real);
+      ("education_level", education |> float_of_int |> real);
+      ("profession", discrete profession);
+      ("work_class", discrete w_class);
+      ("capital_gains", cg |> float_of_int |> real)
     ]
 end
 
@@ -334,31 +337,31 @@ module Arithmetic = struct
     dtype = sbind (s, sbind (n,
       modal (one, real) -* (modal (one, real) -* real)
     ));
-    source = Value.F (fun v -> match v with
-      | Value.Real l -> Value.F (fun v -> match v with
-        | Value.Real r -> Value.Real (l +. r)
-        | _ -> failwith "not a number")
-      | _ -> failwith "not a number");
+    source = Vterm.Function ("add", fun x ->
+      Vterm.Value (Vterm.Function ("add x", fun y ->
+        let f a b = a +. b in
+        Vterm.Evaluation.real_map2 f (Vterm.eval x) (Vterm.eval y)
+      )))
   }
   let mult = {
     Primitive.name = "mult";
     dtype = sbind (s, sbind (n,
       modal (s, p_real n) -* (modal (n, p_real s) -* real)
     ));
-    source = Value.F (fun v -> match v with
-      | Value.Real l -> Value.F (fun v -> match v with
-        | Value.Real r -> Value.Real (l *. r)
-        | _ -> failwith "not a number")
-      | _ -> failwith "not a number");
+    source = Vterm.Function ("add", fun x ->
+      Vterm.Value (Vterm.Function ("add x", fun y ->
+        let f a b = a *. b in
+        Vterm.Evaluation.real_map2 f (Vterm.eval x) (Vterm.eval y)
+      )))
   }
   let succ = {
     Primitive.name = "succ";
     dtype = sbind (s, 
       modal (one, p_real s) -* real
     );
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Real (r +. 1.0)
-      | _ -> failwith "not a number");
+    source = Vterm.Function ("succ", fun r ->
+      Vterm.Evaluation.real_map (fun x -> x +. 1.0) (Vterm.eval r)
+    )
   }
 
   let bad_mult = {
@@ -366,11 +369,11 @@ module Arithmetic = struct
     dtype = sbind (s, sbind (n,
       (p_real s) => ( (p_real n) => real)
     ));
-    source = Value.F (fun v -> match v with
-    | Value.Real l -> Value.F (fun v -> match v with
-      | Value.Real r -> Value.Real (l *. r)
-      | _ -> failwith "not a number")
-    | _ -> failwith "not a number");
+    source = Vterm.Function ("bad_mult", fun x ->
+      Vterm.Value (Vterm.Function ("add x", fun y ->
+        let f a b = a *. b in
+        Vterm.Evaluation.real_map2 f (Vterm.eval x) (Vterm.eval y)
+      )))
   }
 
   let signature = [add; mult; succ]
@@ -414,16 +417,16 @@ module Student = struct
   let moderate = {
     Primitive.name = "moderate";
     dtype = (bounded_by 5) => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r >= 3.0)
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("moderate", fun r ->
+      let f x = x >= 3.0 in
+      Vterm.Evaluation.real_filter f (Vterm.eval r))
   }
   let poor = {
     Primitive.name = "poor";
     dtype = (bounded_by 5) => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r < 3.0)
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("poor", fun r ->
+      let f x = x < 3.0 in
+      Vterm.Evaluation.real_filter f (Vterm.eval r))
   }
   
   let is_rural = discrete_check "is_rural" "rural" address_type_t
@@ -431,31 +434,31 @@ module Student = struct
   let is_rep = discrete_check "is_rep" "reputation" reason_t
   let is_prox = discrete_check "is_prox" "proximity" reason_t
 
-  let family_is = {
+  (* let family_is = {
     Primitive.name = "family_is";
     dtype = row => (family_t => bool);
     source = Value.F (fun v -> match v with
       | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "family" r) = (Some v)))
       | _ -> failwith "not a row");
-  }
+  } *)
 
-  let checks = [moderate; poor; is_rural; is_urban; is_rep; is_prox; family_is]
+  let checks = [moderate; poor; is_rural; is_urban; is_rep; is_prox]
 
   (* put it all together *)
   let signature = keys @ conversions @ checks
 
   (* and help make some rows *)
   (* schema = [grade; reason; wknd; wkdy; address; payed; family; absences] *)
-  let make (grade : int) (reason : string) (wknd : int) (wkdy : int) (address : string) (payed : bool) (family : int) (absences : int) : Value.t =
-    Value.row_of_list [
-      ("grade", Value.Real (float_of_int grade)); 
-      ("reason", Value.Discrete reason);
-      ("weekend_consumption", Value.Real (float_of_int wknd));
-      ("weekday_consumption", Value.Real (float_of_int wkdy));
-      ("address_type", Value.Discrete (address));
-      ("payed", Value.Bool (payed));
-      ("family", Value.Real (float_of_int family));
-      ("absences", Value.Real (float_of_int absences))
+  let make (grade : int) (reason : string) (wknd : int) (wkdy : int) (address : string) (payed : bool) (family : int) (absences : int) : Vterm.t =
+    let open Vterm.Alt in row [
+      ("grade", real (float_of_int grade)); 
+      ("reason", discrete reason);
+      ("weekend_consumption", real (float_of_int wknd));
+      ("weekday_consumption", real (float_of_int wkdy));
+      ("address_type", discrete (address));
+      ("payed", bool (payed));
+      ("family", real (float_of_int family));
+      ("absences", real (float_of_int absences))
     ]
 end
 
@@ -495,55 +498,62 @@ module Performance = struct
   let low = {
     Primitive.name = "low";
     dtype = (bounded_by 100) => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r <= 69.0)
-      | _ -> failwith "not a real value");
+    source = Vterm.Function ("low", fun r ->
+      let f x = x <= 69.0 in
+      Vterm.Evaluation.real_filter f (Vterm.eval r))
   }
   let medium = {
     Primitive.name = "medium";
     dtype = (bounded_by 100) => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r > 69.0 && r <= 89.0)
-      | _ -> failwith "not a real value");
+    source = Vterm.Function ("medium", fun r ->
+      let f x = x > 69.0 && x <= 89.0 in
+      Vterm.Evaluation.real_filter f (Vterm.eval r))
   }
   let high = {
     Primitive.name = "high";
     dtype = (bounded_by 100) => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r > 89.0)
-      | _ -> failwith "not a real value");
+      source = Vterm.Function ("high", fun r ->
+      let f x = x > 89.0 in
+      Vterm.Evaluation.real_filter f (Vterm.eval r))
   }
 
   let to_bracket = {
     Primitive.name = "to_bracket";
     dtype = (bounded_by 100) => bracket_t;
-    source = Value.F (fun v -> match v with
-      | Value.Real r ->
-        if r <= 69.0 then
-          Value.Discrete "low"
-        else if r <= 89.0 then
-          Value.Discrete "medium"
-        else
-          Value.Discrete "high"
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("to_bracket", fun r ->
+      let disc tm = match tm with
+        | Vterm.Real r ->
+          if r <= 69.0 then
+            Vterm.Value (Vterm.Discrete "low")
+          else if r <= 89.0 then
+            Vterm.Value (Vterm.Discrete "medium")
+          else Vterm.Value (Vterm.Discrete "high")
+        | _ -> Vterm.Diverge in
+      r |> Vterm.eval >>= disc
+    )
   }
 
   let is_bracket = {
     Primitive.name = "is_bracket";
     dtype = (bounded_by 100) => (bracket_t => bool);
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.F (fun v -> match v with
-        | Value.Discrete b ->
-          if r <= 69.0 && b = "low" then
-            Value.Bool true
+    source = Vterm.Function ("is_bracket", fun r ->
+      Vterm.Value (Vterm.Function ("is_bracket r", fun brack ->
+      let check brack r = match brack with
+        | Vterm.Discrete b -> begin match r with
+          | Vterm.Real r ->
+            if r <= 69.0 && b = "low" then
+              Vterm.Evaluation.of_bool true
           else if r <= 89.0 && r > 69.0 && b = "medium" then
-            Value.Bool true
+            Vterm.Evaluation.of_bool true
           else if r > 89.0 && b = "high" then
-            Value.Bool true
+            Vterm.Evaluation.of_bool true
           else
-            Value.Bool false 
-        | _ -> failwith "not a bracket")
-      | _ -> failwith "not a real")
+            Vterm.Evaluation.of_bool false
+          | _ -> Diverge
+        end
+        | _ -> Diverge in
+      Vterm.Evaluation.flat_map2 check (Vterm.eval brack) (Vterm.eval r)
+    )))
   }
 
   let is_low = discrete_check "is_low" "low" bracket_t
@@ -554,16 +564,18 @@ module Performance = struct
   let gt_7 = {
     Primitive.name = "gt_7";
     dtype = absences_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r > 7.0)
-      | _ -> failwith "not a real value");
+    source = Vterm.Function ("gt_7", fun r ->
+      let f r = r > 7.0 in
+        r |> Vterm.eval |> Vterm.Evaluation.real_filter f
+    )
   }
   let leq_7 = {
     Primitive.name = "leq_7";
     dtype = absences_t => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r <= 7.0)
-      | _ -> failwith "not a real value");
+    source = Vterm.Function ("leq_7", fun r ->
+      let f r = r <= 7.0 in
+        r |> Vterm.eval |> Vterm.Evaluation.real_filter f
+    )
   }
 
   let utilities = [to_bracket; is_bracket; is_low; is_medium; is_high; gt_7; leq_7]
@@ -573,14 +585,14 @@ module Performance = struct
 
   (* and make it easier to construct examples *)
   (* schema: level; satisfaction; absences; participation; resources; discussion; *)
-  let make (level : int) (satisfaction : bool) (absences : int) (participation : int) (resources : int) (discussion : int) : Value.t =
-    Value.row_of_list [
-      ("level", Value.Real (float_of_int level));
-      ("satisfaction", Value.Bool satisfaction);
-      ("absences", Value.Real (float_of_int absences));
-      ("participation", Value.Real (float_of_int participation));
-      ("resources", Value.Real (float_of_int resources));
-      ("discussion", Value.Real (float_of_int discussion));
+  let make (level : int) (satisfaction : bool) (absences : int) (participation : int) (resources : int) (discussion : int) : Vterm.t =
+    let open Vterm.Alt in row [
+      ("level", real (float_of_int level));
+      ("satisfaction", bool satisfaction);
+      ("absences", real (float_of_int absences));
+      ("participation", real (float_of_int participation));
+      ("resources", real (float_of_int resources));
+      ("discussion", real (float_of_int discussion));
     ]
 end
 
@@ -617,42 +629,49 @@ module Compas = struct
   let conversions = [is_young; is_mid_age; is_elderly]
 
   (* utilities *)
-  let race_is = {
+  (* let race_is = {
     Primitive.name = "race_is";
     dtype = row => (race_t => bool);
     source = Value.F (fun v -> match v with
     | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "race" r) = (Some v)))
     | _ -> failwith "not a row");
-  }
+  } *)
   let is_bracket = {
     Primitive.name = "is_bracket";
     dtype = score => (bracket_t => bool);
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.F (fun v -> match v with
-        | Value.Discrete b ->
-          if r < 5.0 && b = "low" then
-            Value.Bool true
-          else if r >= 5.0 && r < 8.0 && b = "medium" then
-            Value.Bool true
+    source = Vterm.Function ("is_bracket", fun r ->
+      Vterm.Value (Vterm.Function ("is_bracket r", fun brack ->
+      let check brack r = match brack with
+        | Vterm.Discrete b -> begin match r with
+          | Vterm.Real r ->
+            if r < 5.0 && b = "low" then
+              Vterm.Evaluation.of_bool true
+          else if r < 8.0 && r >= 5.0 && b = "medium" then
+            Vterm.Evaluation.of_bool true
           else if r >= 8.0 && b = "high" then
-            Value.Bool true
+            Vterm.Evaluation.of_bool true
           else
-            Value.Bool false
-        | _ -> failwith "not a discrete value")
-      | _ -> failwith "not a real number")
+            Vterm.Evaluation.of_bool false
+          | _ -> Diverge
+        end
+        | _ -> Diverge in
+      Vterm.Evaluation.flat_map2 check (Vterm.eval brack) (Vterm.eval r)
+    )))
   }
   let to_bracket = {
     Primitive.name = "to_bracket";
     dtype = score => bracket_t;
-    source = Value.F (fun v -> match v with
-      | Value.Real r ->
-        if r < 5.0 then
-          Value.Discrete "low"
-        else if r < 8.0 then
-          Value.Discrete "medium"
-        else
-          Value.Discrete "high"
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("to_bracket", fun r ->
+      let disc tm = match tm with
+        | Vterm.Real r ->
+          if r < 5.0 then
+            Vterm.Value (Vterm.Discrete "low")
+          else if r < 8.0 then
+            Vterm.Value (Vterm.Discrete "medium")
+          else Vterm.Value (Vterm.Discrete "high")
+        | _ -> Vterm.Diverge in
+      r |> Vterm.eval >>= disc
+    )
   }
   let is_low = discrete_check "is_low" "low" bracket_t
   let is_medium = discrete_check "is_medium" "medium" bracket_t
@@ -661,30 +680,32 @@ module Compas = struct
   let is_male = discrete_check "is_male" "male" gender_t
   let is_female = discrete_check "is_female" "female" gender_t
 
-  let gender_is = {
+  (* let gender_is = {
     Primitive.name = "gender_is";
     dtype = row => (gender_t => bool);
     source = Value.F (fun v -> match v with
     | Value.Row r -> Value.F (fun v -> Value.Bool ((Value.StringMap.get "gender" r) = (Some v)))
     | _ -> failwith "not a row");
-  }
+  } *)
 
   let none = {
     Primitive.name = "none";
     dtype = counts => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r = 0.0)
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("none", fun r ->
+      let f r = r = 0.0 in
+        r |> Vterm.eval |> Vterm.Evaluation.real_filter f
+    )
   }
   let lots = {
     Primitive.name = "lots";
     dtype = counts => bool;
-    source = Value.F (fun v -> match v with
-      | Value.Real r -> Value.Bool (r = 15.0)
-      | _ -> failwith "not a real value")
+    source = Vterm.Function ("lots", fun r ->
+      let f r = r = 15.0 in
+        r |> Vterm.eval |> Vterm.Evaluation.real_filter f
+    )
   }
 
-  let utilities = [is_bracket; to_bracket; is_low; is_medium; is_high; none; lots; race_is; is_male; is_female]
+  let utilities = [is_bracket; to_bracket; is_low; is_medium; is_high; none; lots; is_male; is_female]
 
   (* put it together *)
   let signature = keys @ conversions @ utilities
@@ -694,15 +715,15 @@ module Compas = struct
   let make 
     (sex : string) (age_cat : string) (race : string) 
     (juv_fel : int) (priors : int) (recid : int) 
-    (violence : int) (fta : int) : Value.t =
-    Value.row_of_list [
-      ("gender", Value.Discrete sex);
-      ("age_cat", Value.Discrete age_cat);
-      ("race", Value.Discrete race);
-      ("juv_felonies", Value.Real (float_of_int juv_fel));
-      ("priors", Value.Real (float_of_int priors));
-      ("recidivism", Value.Real (float_of_int recid));
-      ("violence", Value.Real (float_of_int violence));
-      ("fta", Value.Real (float_of_int fta));
+    (violence : int) (fta : int) : Vterm.t =
+    let open Vterm.Alt in row [
+      ("gender", discrete sex);
+      ("age_cat", discrete age_cat);
+      ("race", discrete race);
+      ("juv_felonies", real (float_of_int juv_fel));
+      ("priors", real (float_of_int priors));
+      ("recidivism", real (float_of_int recid));
+      ("violence", real (float_of_int violence));
+      ("fta", real (float_of_int fta));
     ]
 end

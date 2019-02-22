@@ -1,3 +1,5 @@
+open Zipper
+
 (* simple terms extended with type abstraction and application - system F *)
 type t =
   | Free of Name.t
@@ -38,7 +40,7 @@ and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
       context,
       Dtype.abstract' n db dom,
       Sc (abstract' n (db + 1) tm')
-    )
+    )    
   (* if there's no recursion, just return *)
   | _ -> tm
 

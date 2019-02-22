@@ -16,10 +16,13 @@ let one : Sensitivity.t = Sensitivity.Const (Rational.of_int 1)
 let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
 
 (* and type constanst *)
-let real : Dtype.t = Dtype.Precise (Dtype.Real (Sensitivity.Const (Rational.Infinity)))
+let real : Dtype.t = Dtype.Bounded (Dtype.Interval (Sensitivity.Const (Rational.Infinity)))
 let bool : Dtype.t = Dtype.Base "bool"
 let int : Dtype.t = Dtype.Base "int"
-let row : Dtype.t = Dtype.Base "row"
+
+(* for rows *)
+let key : Dtype.t = Dtype.Base "key"
+let row (value : Dtype.t) : Dtype.t = Dtype.Bag (Dtype.Tensor (key, value))
 
 let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 
