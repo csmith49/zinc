@@ -4,6 +4,7 @@ type mechanism =
   | Laplace
   | Exponential of Dtype.t * (Vterm.t list)
   | Partition of Dtype.t * (Vterm.t list)
+  | Recursive of Dtype.t
 
 (* benchmarks maintain a list of all the info we need to test synthesis *)
 type t = {
@@ -23,6 +24,7 @@ let goal_type : t -> Dtype.t = fun bm -> match bm.mechanism with
   | Exponential (a, _) -> modal (k, mset (row a, infinity)) -* (a => real)
   | Partition (a, _) -> 
     mset (a, infinity) => (modal (k, mset (row a, infinity)) -* mset (pair (a, real), infinity))
+  | Recursive dt -> dt
 
 (* eventually, we have to convert it into a node *)
 let to_node : t -> Node.t = fun bm -> {
@@ -100,3 +102,4 @@ let verify (tm : Vterm.t) (bm : t) : bool = match bm.mechanism with
   | Laplace -> verify_laplace tm bm.examples
   | Exponential (_, pop) -> verify_exponential tm bm.examples pop
   | Partition (_, keys) -> verify_partition tm bm.examples keys
+  | _ -> false

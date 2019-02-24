@@ -9,11 +9,14 @@ let a : Dtype.t = Dtype.Free (Name.of_string "a")
 let b : Dtype.t = Dtype.Free (Name.of_string "b")
 let c : Dtype.t = Dtype.Free (Name.of_string "c")
 
+let eps : Sensitivity.t = Sensitivity.Free (Name.of_string "eps")
+
 (* some common constants *)
 let infinity : Sensitivity.t = Sensitivity.Const (Rational.Infinity)
 let zero : Sensitivity.t = Sensitivity.Const (Rational.of_int 0)
 let one : Sensitivity.t = Sensitivity.Const (Rational.of_int 1)
 let two : Sensitivity.t = Sensitivity.Const (Rational.of_int 2)
+let three : Sensitivity.t = Sensitivity.Const (Rational.of_int 3)
 
 (* and type constanst *)
 let real : Dtype.t = Dtype.Bounded (Dtype.Interval (Sensitivity.Const (Rational.Infinity)))
@@ -29,7 +32,9 @@ let constant_type : string -> Dtype.t = fun s -> Dtype.Base s
 (* precise type constructors *)
 let p_real (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.Real s)
 let p_int (s : Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.Natural s)
+let p_list (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Precise (Dtype.List (snd p, fst p))
 let mset (p : Dtype.t * Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.MSet (snd p, fst p))
+let bag (dt : Dtype.t) : Dtype.t = Dtype.Bag dt
 
 (* and bounded type constructors *)
 let bounded (s : Sensitivity.t) : Dtype.t = Dtype.Bounded (Dtype.Interval s)

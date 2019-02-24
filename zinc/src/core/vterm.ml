@@ -605,8 +605,20 @@ module Evaluation = struct
             |> of_option
         | _ -> Diverge
 
+    let rec list_map : (vterm -> t) -> vterm -> t = fun f -> function
+        | ConsList Nil -> Value (ConsList Nil)
+        | ConsList (Cons (hd, tl)) ->
+            let tl = list_map f tl in
+            let hd = f hd in
+                map2 (fun h -> fun t -> ConsList (Cons (h, t))) hd tl
+        | _ -> Diverge
+
     let real_gt : t -> t -> bool = fun b -> fun s ->
         CCOpt.map2 (>) (to_real b) (to_real s) |> CCOpt.get_or ~default:false
+
+    let get_exn : t -> vterm = function
+        | Value tm -> tm
+        | _ -> failwith "cannot cast divergence"
 end
 
 open CCOpt.Infix
@@ -743,6 +755,10 @@ module Alt = struct
     let real : float -> t = fun f -> Real f
 
     let discrete : string -> t = fun s -> Discrete s
+
+    let pair : t -> t -> t = fun l -> fun r -> Pair (l, r)
+
+    let bag : t list -> t = fun ls -> Bag ls
 
     let rec nat : int -> t = fun n -> match n with
         | 0 -> Nat (Zero)

@@ -24,7 +24,7 @@ let adult_02 = {
   mechanism = Laplace;
   budget = 20;
   examples = [
-    (Vterm.Bag [make true "female" "black" 20 12 "army" "federa" 0], Vterm.Real 12.0);
+    (Vterm.Bag [make true "female" "black" 20 12 "army" "federal" 0], Vterm.Real 12.0);
     (Vterm.Bag [
       make true "female" "black" 20 12 "army" "federal" 0;
       make true "female" "black" 20 12 "army" "federal" 0;
