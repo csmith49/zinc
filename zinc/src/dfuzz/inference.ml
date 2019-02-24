@@ -83,7 +83,7 @@ module Sub = struct
 
   (* vterm application *)
   let rec apply_vterm (sub : t) (tm : Vterm.t) : Vterm.t = let open Vterm in match tm with
-    | Abs (dt, Scope body) -> Abs (apply sub dt, Scope (apply_vterm sub body))
+    | Abs (tag, dt, Scope body) -> Abs (tag, apply sub dt, Scope (apply_vterm sub body))
     | App (l, r) -> App (apply_vterm sub l, apply_vterm sub r)
 
     | MatchNat (e, zero, i, Scope succ) ->

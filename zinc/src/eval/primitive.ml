@@ -6,8 +6,8 @@ type t = {
 }
 
 (* step one is being able to convert primitives to proposals *)
-let to_proposal : t -> Proposal.t = fun p -> {
-    Proposal.solution = p.source;
+let to_proposal : t -> Subproblem.Proposal.t = fun p -> {
+    Subproblem.Proposal.solution = p.source;
     dtype = p.dtype;
     wildcards = [];
     context = Context.concrete_of_var (Name.of_string p.name);

@@ -2,7 +2,7 @@ open Vterm
 
 type branch =
     (* basic lambda calculus *)
-    | ZAbs of Dtype.t * Name.t
+    | ZAbs of Name.t * Dtype.t * Name.t
     | ZAppLeft of vterm
     | ZAppRight of vterm
     
@@ -55,7 +55,7 @@ let up : t -> t option = function
     | (tm, branch :: branches) ->
         let tm' = match branch with
             (* base *)
-            | ZAbs (dt, x) -> Abs (dt, abstract_one x tm)
+            | ZAbs (tag, dt, x) -> Abs (tag, dt, abstract_one x tm)
             | ZAppLeft tm' -> App (tm, tm')
             | ZAppRight tm' -> App (tm', tm)
             
@@ -144,10 +144,10 @@ let down (root : Name.t) (var : string) : t -> t option = function
     | (tm, branches) -> let open Name.Alt in
         let n = root <+ (var ^ (branches |> CCList.length |> string_of_int)) in
             match tm with
-                | Abs (dt, body) ->
+                | Abs (tag, dt, body) ->
                     let x = Var (Free n) in
                     let tm = instantiate (N.of_one x) body in
-                        Some (tm, ZAbs (dt, n) :: branches)
+                        Some (tm, ZAbs (tag, dt, n) :: branches)
                 | App (l, r) ->
                     Some (l, ZAppLeft r :: branches)
 
@@ -170,6 +170,11 @@ let down (root : Name.t) (var : string) : t -> t option = function
                         Some (tm, ZSensAbs n :: branches)
                 | SensApp (tm, sens) ->
                     Some (tm, ZSensApp sens :: branches)
+
+                | Wild (context, dt, body) ->
+                    let w = Var (Free n) in
+                    let tm = instantiate (N.of_one w) body in
+                        Some (tm, ZWild (context, dt, n) :: branches)
 
                 (* values *)
                 | Nat (Succ tm) ->
@@ -201,13 +206,19 @@ open CCOpt.Infix
 
 (* building up to preorder traversal *)
 let rec next (root : Name.t) (var : string) : t -> t option =
-    fun z -> (right root var z) <+> ((up z) >>= (next root var))
+    fun z -> 
+        let _ = print_endline "NEXT" in
+        (right root var z) <+> ((up z) >>= (next root var))
 
 let preorder (root : Name.t) (var : string) : t -> t option =
-    fun z -> (down root var z) <+> (next root var z)
+    fun z -> 
+        let _ = print_endline "PREORDER" in
+        (down root var z) <+> (next root var z)
 
 let rec preorder_until (root : Name.t) (var : string) (pred : vterm -> bool) : t -> t option =
-    fun z -> (CCOpt.if_ (fun c -> pred (get c)) z) <+>
+    fun z -> 
+        let _ = print_endline "PO_UNTIL" in
+        (CCOpt.if_ (fun c -> pred (get c)) z) <+>
         ((preorder root var z) >>= (preorder_until root var pred))
 
 (* term to and from conversion *)
@@ -218,7 +229,7 @@ let rec to_term : t -> vterm = fun z -> match up z with
 
 (* scoping *)
 let bindings_of_branch : branch -> (Name.t * Dtype.t) list = function
-    | ZAbs (dt, n) -> [(n, dt)]
+    | ZAbs (tag, dt, n) -> [(tag, dt)]
     | ZMatchNatSucc (_, _, i, n) -> [(n, Dtype.Precise (Dtype.Natural i))]
     | ZMatchConsCons (dt, _, _, i, hd, tl) -> 
         [(hd, dt) ; (tl, Dtype.Precise (Dtype.List (i, dt)))]

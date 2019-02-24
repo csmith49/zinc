@@ -55,6 +55,8 @@ let verify_laplace (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) : bool =
   let check_pair = fun (i, o) ->
     let output = o |> Vterm.eval in
     let input = Vterm.App (tm, i) |> Vterm.eval in
+    let _ = print_endline (Vterm.Evaluation.to_string input) in
+    let _ = print_endline (Vterm.Evaluation.to_string output) in
       output = input
   in CCList.for_all check_pair io
 
@@ -62,7 +64,8 @@ let verify_exponential (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) (pop : Vte
   let open Vterm.Alt in
   let check_pair = fun (i, o) ->
     let score = tm <!> i <!> o |> Vterm.eval in CCList.for_all (fun p ->
-      p = o || Vterm.Evaluation.real_geq score (tm <!> i <!> p |> Vterm.eval)) pop in
+      let _ = print_endline (Vterm.Evaluation.to_string score) in
+      p = o || Vterm.Evaluation.real_gt score (tm <!> i <!> p |> Vterm.eval)) pop in
   CCList.for_all check_pair io
 
 let verify_partition (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) (keys : Vterm.t list) : bool =
@@ -70,6 +73,8 @@ let verify_partition (tm : Vterm.t) (io : (Vterm.t * Vterm.t) list) (keys : Vter
   let check_pair = fun (i, o) ->
     let output = o |> Vterm.eval in
     let input = (tm <!> (Vterm.Bag keys) <!> i) |> Vterm.eval in
+    let _ = print_endline (Vterm.Evaluation.to_string input) in
+    let _ = print_endline (Vterm.Evaluation.to_string output) in
       output = input
     in CCList.for_all check_pair io
 (* 

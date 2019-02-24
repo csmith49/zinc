@@ -57,6 +57,10 @@ module Stream = struct
   type t = {
     root : name;
     abs_symbols : Cycle.t;
+    nat_symbols : Cycle.t;
+    hd_symbols : Cycle.t;
+    tl_symbols : Cycle.t;
+    fix_symbols : Cycle.t;
     wild_symbols : Cycle.t;
     sens_symbols : Cycle.t;
     dt_symbols : Cycle.t;
@@ -76,10 +80,26 @@ module Stream = struct
   let draw_dt : t -> name * t = fun s ->
     let (n, c') = Cycle.draw s.dt_symbols in
     (s.root ++ n, {s with dt_symbols = c'})
+  let draw_fix : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.fix_symbols in
+    (s.root ++ n, {s with fix_symbols = c'})
+  let draw_hd : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.hd_symbols in
+    (s.root ++ n, {s with hd_symbols = c'})
+  let draw_tl : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.tl_symbols in
+    (s.root ++ n, {s with tl_symbols = c'})
+  let draw_nat : t -> name * t = fun s ->
+    let (n, c') = Cycle.draw s.nat_symbols in
+    (s.root ++ n, {s with nat_symbols = c'})
 (* simplest constructor just takes in a root *)
   let of_root : name -> t = fun r -> {
       root = r;
       abs_symbols = Cycle.of_list ["x";"y";"z"];
+      nat_symbols = Cycle.of_list ["n"; "m"];
+      hd_symbols = Cycle.of_list ["l"];
+      tl_symbols = Cycle.of_list ["ls"];
+      fix_symbols = Cycle.of_list ["f"; "g"; "h"];
       wild_symbols = Cycle.of_list ["w"];
       sens_symbols = Cycle.of_list ["s";"k";"t"];
       dt_symbols = Cycle.of_list ["a";"b";"c"];

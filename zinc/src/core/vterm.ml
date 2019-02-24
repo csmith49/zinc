@@ -19,7 +19,7 @@ end
 type t =
     (* basic lambda calculus constructions *)
     | Var : variable -> t
-    | Abs : Dtype.t * (o scope) -> t
+    | Abs : Name.t * Dtype.t * (o scope) -> t
     | App : t * t -> t
     (* pattern-matching naturals and lists *)
     | MatchNat : t * t * Sensitivity.t * (o scope) -> t
@@ -89,10 +89,10 @@ and abstract_depth (n : Name.t) (db : int) : int -> t -> t = fun depth -> fun tm
 and abstract' (n : Name.t) (db : int) (tm : t) : t = match tm with
     (* when the name matches, put in the right depth *)
     | Var (Free x) -> if Name.eq n x then Var (Bound db) else tm
-    | Abs (dt, s) ->
+    | Abs (tag, dt, s) ->
         let dt' = Dtype.abstract' n db dt in
         let s' = bind_map (abstract_depth n db) s in
-            Abs (dt', s')
+            Abs (tag, dt', s')
     | App (l, r) -> App (abstract' n db l, abstract' n db r)
     (* pattern-matching *)
     | MatchNat (e, zero, i, succ) ->
@@ -169,9 +169,9 @@ and instantiate_depth (img : t) (db : int) : int -> t -> t = fun depth -> fun tm
 and instantiate' (img : t) (db : int) (tm : t) : t = match tm with
     (* when we're at the right depth, put the image in *)
     | Var (Bound i) -> if i = db then img else tm
-    | Abs (dt, s) ->
+    | Abs (tag, dt, s) ->
         let s' = bind_map (instantiate_depth img db) s in
-            Abs (dt, s')
+            Abs (tag, dt, s')
     | App (l, r) ->
         App (instantiate' img db l, instantiate' img db r)
     (* pattern-matching *)
@@ -243,10 +243,10 @@ and instantiate_dtype_depth (img : Dtype.t) (db : int) : int -> t -> t =
     fun depth -> fun tm -> instantiate_dtype' img (db + depth) tm
 and instantiate_dtype' (img : Dtype.t) (db : int) (tm : t) : t = match tm with
     (* don't increment db when we break into dtype.instantiate' *)
-    | Abs (dt, s) ->
+    | Abs (tag, dt, s) ->
         let dt' = Dtype.instantiate' img db dt in
         let s' = bind_map (instantiate_dtype_depth img db) s in
-            Abs (dt', s')
+            Abs (tag, dt', s')
     | App (l, r) ->
         App (instantiate_dtype' img db l, instantiate_dtype' img db r)
     (* pattern-matching *)
@@ -319,10 +319,10 @@ and instantiate_sens_depth (img : Sensitivity.t) (db : int) : int -> t -> t =
     fun depth -> fun tm -> instantiate_sens' img (db + depth) tm
 and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm with
     (* don't increment db when moving into sensitivity.instantiate' *)
-    | Abs (dt, s) ->
+    | Abs (tag, dt, s) ->
         let dt' = Dtype.instantiate_sens' img db dt in
         let s' = bind_map (instantiate_sens_depth img db) s in
-            Abs (dt', s')
+            Abs (tag, dt', s')
     | App (l, r) ->
         App (instantiate_sens' img db l, instantiate_sens' img db r)
     (* pattern-matching *)
@@ -386,7 +386,7 @@ and instantiate_sens' (img : Sensitivity.t) (db : int) (tm : t) : t = match tm w
 let rec to_string : t -> string = function
     | Var (Free n) -> Name.to_string n
     | Var (Bound i) -> string_of_int i
-    | Abs (dt, Scope body) ->
+    | Abs (tag, dt, Scope body) ->
         let dt' = Dtype.to_string dt in
         let body' = to_string body in
             "Abs(" ^ dt' ^ ", " ^ body' ^ ")"
@@ -443,6 +443,74 @@ let rec to_string : t -> string = function
         let dist' = to_string dist in
         let usage' = to_string usage in
             "LetDraw(" ^ dt' ^ ", " ^ dist' ^ ", " ^ usage' ^ ")"
+
+let rec format : t -> string = fun tm ->
+    let stream = Name.Stream.of_root (Name.of_string "") in
+    fst (format' tm stream)
+and format' (tm : t) (s : Name.Stream.t) : string * Name.Stream.t = match tm with
+    | Var (Free n) -> (Name.to_string n, s)
+    | Var (Bound i) -> (string_of_int i, s)
+    | Abs (tag, _, body) ->
+        let x, s = Name.Stream.draw_abs s in
+        let body, s = format' (instantiate_one (Var (Free x)) body) s in
+            ("λ" ^ (Name.to_string x) ^ "." ^ body, s)
+    | App (l, r) ->
+        let l, s = format' l s in
+        let r, s = format' r s in
+            (l ^ " (" ^ r ^ ")", s)
+    | MatchNat (e, zero, _, succ) ->
+        let e, s = format' e s in
+        let zero, s = format' zero s in
+        let n, s = Name.Stream.draw_nat s in
+        let succ, s = format' (instantiate_one (Var (Free n)) succ) s in
+            ("match " ^ e ^ ": Z -> " ^ zero ^ " | " ^ (Name.to_string n) ^ " + 1 -> " ^ succ, s)
+    | MatchCons (_, e, nil, _, cons) ->
+        let e, s = format' e s in
+        let nil, s = format' nil s in
+        let l, s = Name.Stream.draw_hd s in
+        let ls, s = Name.Stream.draw_tl s in
+        let cons, s  = format' (instantiate_two (Var (Free l)) (Var (Free ls)) cons) s in
+            ("match " ^ e ^ ": [] -> " ^ nil ^ " | " ^ (Name.to_string l) ^ ":" ^ (Name.to_string ls) ^ " -> " ^ cons, s)
+    | TypeAbs (Scope body) | SensAbs (Scope body) -> format' body s
+    | TypeApp (f, _) | SensApp (f, _) -> format' f s
+    | Wild (_, _, body) ->
+        let w, s = Name.Stream.draw_wild s in
+        let body, s = format' (instantiate_one (Var (Free w)) body) s in
+        ("\\" ^ (Name.to_string w) ^ "." ^ body, s)
+    | Nat (Zero) -> "Z", s
+    | Nat (Succ tm) ->
+        let tm, s = format' tm s in ("S(" ^ tm ^ ")", s)
+    | ConsList (Nil) -> "[]", s
+    | ConsList (Cons (hd, tl)) ->
+        let hd, s = format' hd s in
+        let tl, s = format' tl s in
+            (hd ^ ":" ^ tl, s)
+    | Bool True -> "true", s
+    | Bool False -> "false", s
+    | Discrete str -> str, s
+    | Pair (l, r) ->
+        let l, s = format' l s in
+        let r, s = format' r s in
+            (l ^ " * " ^ r, s)
+    | Real f -> string_of_float f, s
+    | Bag ts ->
+        "BAG", s
+    | Function (id, _) -> id, s
+    | Fix (_, body) ->
+        let x, s = Name.Stream.draw_fix s in
+        let body, s = format' (instantiate_one (Var (Free x)) body) s in
+            ("fix " ^ (Name.to_string x) ^ "." ^ body, s)
+    | Do tm ->
+        let tm, s = format' tm s in
+        ("do " ^ tm, s)
+    | Return tm ->
+        let tm, s = format' tm s in
+        ("return " ^ tm, s)
+    | LetDraw (_, dist, usage) ->
+        let dist, s = format' dist s in
+        let x, s = Name.Stream.draw_abs s in
+        let usage, s = format' (instantiate_one (Var (Free x)) usage) s in
+            ("sample " ^ (Name.to_string x) ^ " = " ^ dist ^ " in " ^ usage, s)
 
 type vterm = t
 
@@ -532,8 +600,8 @@ module Evaluation = struct
             |> of_option
         | _ -> Diverge
 
-    let real_geq : t -> t -> bool = fun b -> fun s ->
-        CCOpt.map2 (>=) (to_real b) (to_real s) |> CCOpt.get_or ~default:false
+    let real_gt : t -> t -> bool = fun b -> fun s ->
+        CCOpt.map2 (>) (to_real b) (to_real s) |> CCOpt.get_or ~default:false
 end
 
 open CCOpt.Infix
@@ -542,7 +610,7 @@ open Evaluation.Infix
 
 let rec eval : t -> Evaluation.t = function
     (* compile function by wrapping it as a closure *)
-    | Abs (_, body) ->
+    | Abs (tag, _, body) ->
         let closure v = eval (instantiate_one v body) in
             Function ("closure", closure) |> Evaluation.return
 
@@ -596,7 +664,7 @@ let rec eval : t -> Evaluation.t = function
 (* how big is the term *)
 let rec size : t -> int = function
     | Var (_) -> 1
-    | Abs (_, Scope body) -> 1 + (size body)
+    | Abs (tag, _, Scope body) -> 1 + (size body)
     | App (l, r) -> 1 + (size l) + (size r)
     
     | MatchNat (e, zero, _, Scope succ) ->
@@ -638,7 +706,7 @@ let is_wild_binder : t -> bool = function
 
 let rec wild_closed : t -> bool = function
     | Var _ -> true
-    | Abs (_, Scope body) -> wild_closed body
+    | Abs (tag, _, Scope body) -> wild_closed body
     | App (l, r) -> (wild_closed l) && (wild_closed r)
     | MatchNat (e, zero, _, Scope succ) ->
         (wild_closed e) && (wild_closed zero) && (wild_closed succ)
@@ -655,6 +723,8 @@ let rec wild_closed : t -> bool = function
     | Do tm | Return tm -> wild_closed tm
     | LetDraw (_, dist, Scope usage) -> (wild_closed dist) && (wild_closed usage)
     | _ -> true
+
+let equal l r = l = r
 
 (* ease of construction *)
 module Alt = struct
@@ -682,7 +752,7 @@ module Alt = struct
         | _ -> v
 
     let abs (v : t) (body : t) : t = match v with
-        | Var (Free n) -> Abs (Dtype.Base "test", abstract (N.of_one n) body)
+        | Var (Free n) -> Abs (n, Dtype.Base "test", abstract (N.of_one n) body)
         | _ -> v
 
     let app (l : t) (r : t) : t = App (l, r)

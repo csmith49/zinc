@@ -108,7 +108,7 @@ let synthesize (bm : Benchmark.t) : unit =
     let start_time = Sys.time () in
 
     (* PRINTING *)
-    let _ = if normal_print then print_endline ("Checking: " ^ (Vterm.to_string tm)) else () in
+    let _ = if normal_print then print_endline ("Checking: " ^ (Vterm.format tm)) else () in
     let _ = if more_print then 
       print_endline ("    Obligation: " ^ (Constraint.to_string node.Node.obligation)) else () in
     let _ = if !pause then (let _ = read_line () in ()) else () in
@@ -142,22 +142,22 @@ let synthesize (bm : Benchmark.t) : unit =
       else
         let root = node.Node.root <+ ("spec_" ^ (string_of_int !counter)) in
         let subproblem = Subproblem.of_node (root <+ "w") node in
-        let proposals = primitive_proposals @ (Subproblem.variable_proposals subproblem) in
+        let proposals = primitive_proposals @ (Subproblem.Proposal.variables subproblem) in
       
         let _ = if more_print then print_endline ("    Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal)) else () in
 
-        let f = fun p -> Subproblem.specialize root p subproblem.Subproblem.context in
+        let f = fun p -> Subproblem.Proposal.specialize root p subproblem.Subproblem.context in
         let solutions = CCList.flat_map f proposals in
         let steps = CCList.filter_map (fun p -> 
           let ans = Subproblem.insert_proposal p subproblem in
           let _ = if more_print then 
             print_endline 
               ("\tExpansion: " ^ "\n\t    " ^ 
-              (Proposal.to_string p) ^ "...\n\t    " ^ 
-              (Constraint.to_string p.Proposal.obligation) ^ "...\n\t    " ^ 
+              (Subproblem.Proposal.to_string p) ^ "...\n\t    " ^ 
+              (Constraint.to_string p.Subproblem.Proposal.obligation) ^ "...\n\t    " ^ 
               (if CCOpt.is_some ans then "ok" else "no")) else ()
             in ans)
-          (solutions @ (CCOpt.to_list (Subproblem.lambda_proposal subproblem))) in
+          (solutions @ (CCOpt.to_list (Subproblem.Proposal.lambda subproblem))) in
         let _ = if bm_print then print_string ("\tInserting expansions into frontier...") else () in
         let _ = CCList.iter (fun n -> 
           frontier := Frontier.push weights !frontier n) steps in
@@ -177,7 +177,7 @@ let synthesize (bm : Benchmark.t) : unit =
 (* run the experiment, and catch the output *)
 try synthesize benchmark with
   | SynthSuccess node -> 
-    let _ = print_endline ("Solution found: " ^ (Vterm.to_string node.Node.solution)) in
+    let _ = print_endline ("Solution found: " ^ (Vterm.format node.Node.solution)) in
     let _ = if !counting then print_endline ("Solutions explored: " ^ (string_of_int !counter)) else ()in
     let _ = if !time_it then print_endline ("Total time: " ^ (string_of_float !total_time)) else () in
     let _ = if !time_it then print_endline ("SAT time: " ^ (string_of_float !sat_time)) else () in
