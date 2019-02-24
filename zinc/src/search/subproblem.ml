@@ -65,14 +65,17 @@ module Proposal = struct
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
       let w = sp.root <+ "w" in
       let wildcard = Vterm.Var (Vterm.Free w) in
-      let tag = sp.root <+ "x" in
+      let tag = {
+        Vterm.a_var = sp.root <+ "x";
+        a_dt = dom;
+      } in
       let context = Context.Symbolic (sp.root <+ "c") in
       let bindings = [Zipper.ZWild (context, codom, w)] in Some {
-        solution = Vterm.Abs (tag, dom, Vterm.Scope wildcard);
+        solution = Vterm.Abs (tag, Vterm.Scope wildcard);
         dtype = sp.goal;
         wildcards = bindings;
         context = context;
-        obligation = c_rel (context ==. (sp.context +. (Context.Concrete (tag, s))));
+        obligation = c_rel (context ==. (sp.context +. (Context.Concrete (tag.a_var, s))));
       }
     | _ -> None
 

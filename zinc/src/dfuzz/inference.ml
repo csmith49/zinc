@@ -83,19 +83,19 @@ module Sub = struct
 
   (* vterm application *)
   let rec apply_vterm (sub : t) (tm : Vterm.t) : Vterm.t = let open Vterm in match tm with
-    | Abs (tag, dt, Scope body) -> Abs (tag, apply sub dt, Scope (apply_vterm sub body))
+    | Abs (tag, Scope body) -> Abs ({tag with a_dt = apply sub tag.a_dt}, Scope (apply_vterm sub body))
     | App (l, r) -> App (apply_vterm sub l, apply_vterm sub r)
 
-    | MatchNat (e, zero, i, Scope succ) ->
+    | MatchNat (tag, e, zero, Scope succ) ->
       let e' = apply_vterm sub e in
       let zero' = apply_vterm sub zero in
       let succ' = apply_vterm sub succ in
-        MatchNat (e', zero', i, Scope succ')
-    | MatchCons (dt, e, nil, i, Widen (Scope cons)) ->
+        MatchNat (tag, e', zero', Scope succ')
+    | MatchCons (tag, e, nil, Widen (Scope cons)) ->
       let e' = apply_vterm sub e in
       let nil' = apply_vterm sub nil in
       let cons' = apply_vterm sub cons in
-        MatchCons (apply sub dt, e', nil', i, Widen (Scope cons'))
+        MatchCons ({tag with c_dt = apply sub tag.c_dt}, e', nil', Widen (Scope cons'))
     
     | TypeAbs (Scope body) -> TypeAbs (Scope (apply_vterm sub body))
     | TypeApp (tm, dt) -> TypeApp (apply_vterm sub tm, apply sub dt)
@@ -113,12 +113,12 @@ module Sub = struct
     | Pair (l, r) -> Pair (apply_vterm sub l, apply_vterm sub r)
     | Bag ts -> Bag (CCList.map (apply_vterm sub) ts)
 
-    | Fix (dt, Scope body) -> Fix (apply sub dt, Scope (apply_vterm sub body))
+    | Fix (tag, Scope body) -> Fix ({tag with f_dt = apply sub tag.f_dt}, Scope (apply_vterm sub body))
 
     | Do tm -> Do (apply_vterm sub tm)
     | Return tm -> Return (apply_vterm sub tm)
-    | LetDraw (dt, dist, Scope usage) ->
-      LetDraw (apply sub dt, apply_vterm sub dist, Scope (apply_vterm sub usage))
+    | LetDraw (tag, dist, Scope usage) ->
+      LetDraw ({tag with d_dt = apply sub tag.d_dt}, apply_vterm sub dist, Scope (apply_vterm sub usage))
 
     | _ -> tm
 

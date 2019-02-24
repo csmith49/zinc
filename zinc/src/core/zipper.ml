@@ -2,18 +2,18 @@ open Vterm
 
 type branch =
     (* basic lambda calculus *)
-    | ZAbs of Name.t * Dtype.t * Name.t
+    | ZAbs of abs_tag * Name.t
     | ZAppLeft of vterm
     | ZAppRight of vterm
     
     (* pattern-matching *)
-    | ZMatchNatE of vterm * Sensitivity.t * (o scope)
-    | ZMatchNatZero of vterm * Sensitivity.t * (o scope)
-    | ZMatchNatSucc of vterm * vterm * Sensitivity.t * Name.t
+    | ZMatchNatE of nat_tag * vterm * (o scope)
+    | ZMatchNatZero of nat_tag * vterm * (o scope)
+    | ZMatchNatSucc of nat_tag * vterm * vterm * Name.t
     
-    | ZMatchConsE of Dtype.t * vterm * Sensitivity.t * ((o s) scope)
-    | ZMatchConsNil of Dtype.t * vterm * Sensitivity.t * ((o s) scope)
-    | ZMatchConsCons of Dtype.t * vterm * vterm * Sensitivity.t * Name.t * Name.t
+    | ZMatchConsE of cons_tag * vterm * ((o s) scope)
+    | ZMatchConsNil of cons_tag * vterm * ((o s) scope)
+    | ZMatchConsCons of cons_tag * vterm * vterm * Name.t * Name.t
 
     (* type and sens polymorphism *)
     | ZTypeAbs of Name.t
@@ -33,12 +33,12 @@ type branch =
     | ZBag of (vterm list) * (vterm list)
 
     (* recursion *)
-    | ZFix of Dtype.t * Name.t
+    | ZFix of fix_tag * Name.t
 
     (* probability layer *)
     | ZDo
-    | ZLetDrawDist of Dtype.t * (o scope)
-    | ZLetDrawUsage of Dtype.t * t * Name.t
+    | ZLetDrawDist of draw_tag * (o scope)
+    | ZLetDrawUsage of draw_tag * t * Name.t
     | ZReturn
 
 (* zipper is a current view and a way of inverting to get the original *)
@@ -55,18 +55,18 @@ let up : t -> t option = function
     | (tm, branch :: branches) ->
         let tm' = match branch with
             (* base *)
-            | ZAbs (tag, dt, x) -> Abs (tag, dt, abstract_one x tm)
+            | ZAbs (tag, x) -> Abs (tag, abstract_one x tm)
             | ZAppLeft tm' -> App (tm, tm')
             | ZAppRight tm' -> App (tm', tm)
             
             (* pm *)
-            | ZMatchNatE (zero, i, succ) -> MatchNat (tm, zero, i, succ)
-            | ZMatchNatZero (e, i, succ) -> MatchNat (e, tm, i, succ)
-            | ZMatchNatSucc (e, zero, i, x) -> MatchNat (e, zero, i, abstract_one x tm)
+            | ZMatchNatE (tag, zero, succ) -> MatchNat (tag, tm, zero, succ)
+            | ZMatchNatZero (tag, e, succ) -> MatchNat (tag, e, tm, succ)
+            | ZMatchNatSucc (tag, e, zero, x) -> MatchNat (tag, e, zero, abstract_one x tm)
             
-            | ZMatchConsE (dt, nil, i, cons) -> MatchCons (dt, tm, nil, i, cons)
-            | ZMatchConsNil (dt, e, i, cons) -> MatchCons (dt, e, tm, i, cons)
-            | ZMatchConsCons (dt, e, nil, i, hd, tl) -> MatchCons (dt, e, nil, i, abstract_two hd tl tm)
+            | ZMatchConsE (tag, nil, cons) -> MatchCons (tag, tm, nil, cons)
+            | ZMatchConsNil (tag, e, cons) -> MatchCons (tag, e, tm, cons)
+            | ZMatchConsCons (tag, e, nil, hd, tl) -> MatchCons (tag, e, nil, abstract_two hd tl tm)
 
             (* type and sens polymorphism *)
             | ZTypeAbs x -> TypeAbs (abstract_one x tm)
@@ -86,12 +86,12 @@ let up : t -> t option = function
             | ZBag (ls, rs) -> Bag (ls @ [tm] @ rs)
             
             (* recursion *)
-            | ZFix (dt, x) -> Fix (dt, abstract_one x tm)
+            | ZFix (tag, x) -> Fix (tag, abstract_one x tm)
 
             (* prob *)
             | ZDo -> Do tm
-            | ZLetDrawDist (dt, usage) -> LetDraw (dt, tm, usage)
-            | ZLetDrawUsage (dt, dist, x) -> LetDraw (dt, dist, abstract_one x tm)
+            | ZLetDrawDist (tag, usage) -> LetDraw (tag, tm, usage)
+            | ZLetDrawUsage (tag, dist, x) -> LetDraw (tag, dist, abstract_one x tm)
             | ZReturn -> Return tm
         in Some (tm', branches)
     | _ -> None
@@ -105,22 +105,22 @@ let right (root : Name.t) (var : string) : t -> t option = function
                     Some (r, ZAppRight tm :: branches)
 
                 (* pattern matching *)
-                | ZMatchNatE (zero, i, succ) ->
-                    Some (zero, ZMatchNatZero (tm, i, succ) :: branches)
-                | ZMatchNatZero (e, i, succ) ->
+                | ZMatchNatE (tag, zero, succ) ->
+                    Some (zero, ZMatchNatZero (tag, tm, succ) :: branches)
+                | ZMatchNatZero (tag, e, succ) ->
                     let x = Var (Free n) in
                     let succ = instantiate (N.of_one x) succ in
-                        Some (succ, ZMatchNatSucc (e, tm, i, n) :: branches)
+                        Some (succ, ZMatchNatSucc (tag, e, tm, n) :: branches)
 
-                | ZMatchConsE (dt, nil, i, cons) ->
-                    Some (nil, ZMatchConsNil (dt, tm, i, cons) :: branches)
-                | ZMatchConsNil (dt, e, i, cons) ->
+                | ZMatchConsE (tag, nil, cons) ->
+                    Some (nil, ZMatchConsNil (tag, tm, cons) :: branches)
+                | ZMatchConsNil (tag, e, cons) ->
                     let n_hd = n <+ "hd" in
                     let n_tl = n <+ "tl" in
                     let hd = Var (Free n_hd) in
                     let tl = Var (Free n_tl) in
                     let cons = instantiate (N.of_two hd tl) cons in
-                        Some (cons, ZMatchConsCons (dt, e, tm, i, n_hd, n_tl) :: branches)
+                        Some (cons, ZMatchConsCons (tag, e, tm, n_hd, n_tl) :: branches)
                 
                 (* values *)
                 | ZPairLeft r ->
@@ -144,18 +144,18 @@ let down (root : Name.t) (var : string) : t -> t option = function
     | (tm, branches) -> let open Name.Alt in
         let n = root <+ (var ^ (branches |> CCList.length |> string_of_int)) in
             match tm with
-                | Abs (tag, dt, body) ->
+                | Abs (tag, body) ->
                     let x = Var (Free n) in
                     let tm = instantiate (N.of_one x) body in
-                        Some (tm, ZAbs (tag, dt, n) :: branches)
+                        Some (tm, ZAbs (tag, n) :: branches)
                 | App (l, r) ->
                     Some (l, ZAppLeft r :: branches)
 
                 (* pattern matching *)
-                | MatchNat (e, zero, i, succ) ->
-                    Some (e, ZMatchNatE (zero, i, succ) :: branches)
-                | MatchCons (dt, e, nil, i, cons) ->
-                    Some (e, ZMatchConsE (dt, nil, i, cons) :: branches)
+                | MatchNat (tag, e, zero, succ) ->
+                    Some (e, ZMatchNatE (tag, zero, succ) :: branches)
+                | MatchCons (tag, e, nil, cons) ->
+                    Some (e, ZMatchConsE (tag, nil, cons) :: branches)
 
                 (* type and sens poly *)
                 | TypeAbs body ->
@@ -187,16 +187,16 @@ let down (root : Name.t) (var : string) : t -> t option = function
                     Some (tm, ZBag ([], rest) :: branches) 
                 
                 (* recursion *)
-                | Fix (dt, body) ->
+                | Fix (tag, body) ->
                     let x = Var (Free n) in
                     let tm = instantiate (N.of_one x) body in
-                        Some (tm, ZFix (dt, n) :: branches)
+                        Some (tm, ZFix (tag, n) :: branches)
 
                 (* probability *)
                 | Do tm ->
                     Some (tm, ZDo :: branches)
-                | LetDraw (dt, dist, usage) ->
-                    Some (dist, ZLetDrawDist (dt, usage) :: branches)
+                | LetDraw (tag, dist, usage) ->
+                    Some (dist, ZLetDrawDist (tag, usage) :: branches)
                 | Return tm ->
                     Some (tm, ZReturn :: branches)
                 | _ -> None
@@ -207,17 +207,14 @@ open CCOpt.Infix
 (* building up to preorder traversal *)
 let rec next (root : Name.t) (var : string) : t -> t option =
     fun z -> 
-        let _ = print_endline "NEXT" in
         (right root var z) <+> ((up z) >>= (next root var))
 
 let preorder (root : Name.t) (var : string) : t -> t option =
     fun z -> 
-        let _ = print_endline "PREORDER" in
         (down root var z) <+> (next root var z)
 
 let rec preorder_until (root : Name.t) (var : string) (pred : vterm -> bool) : t -> t option =
     fun z -> 
-        let _ = print_endline "PO_UNTIL" in
         (CCOpt.if_ (fun c -> pred (get c)) z) <+>
         ((preorder root var z) >>= (preorder_until root var pred))
 
@@ -229,12 +226,12 @@ let rec to_term : t -> vterm = fun z -> match up z with
 
 (* scoping *)
 let bindings_of_branch : branch -> (Name.t * Dtype.t) list = function
-    | ZAbs (tag, dt, n) -> [(tag, dt)]
-    | ZMatchNatSucc (_, _, i, n) -> [(n, Dtype.Precise (Dtype.Natural i))]
-    | ZMatchConsCons (dt, _, _, i, hd, tl) -> 
-        [(hd, dt) ; (tl, Dtype.Precise (Dtype.List (i, dt)))]
-    | ZFix (dt, n) -> [(n, dt)]
-    | ZLetDrawUsage (dt, _, n) -> [(n, dt)]
+    | ZAbs (tag, n) -> [(tag.a_var, tag.a_dt)]
+    | ZMatchNatSucc (tag, _, _, n) -> [(tag.n_var, Dtype.Precise (Dtype.Natural tag.n_sens))]
+    | ZMatchConsCons (tag, _, _, _, _) -> 
+        [(tag.c_hd, tag.c_dt) ; (tag.c_tl, Dtype.Precise (Dtype.List (tag.c_sens, tag.c_dt)))]
+    | ZFix (tag, _) -> [(tag.f_var, tag.f_dt)]
+    | ZLetDrawUsage (tag, _, _) -> [(tag.d_var, tag.d_dt)]
     | _ -> []
 
 let scope : t -> (Name.t * Dtype.t) list = function
