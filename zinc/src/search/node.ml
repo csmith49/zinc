@@ -2,7 +2,48 @@ type t = {
     root : Name.t;
     obligation : Constraint.t;
     solution : Vterm.t;
+    recursion : Termination.Filter.t option;
 }
+
+let add_filter : t -> Termination.Call.t -> t = fun n -> fun call ->
+    { n with recursion =
+      Some {Termination.Filter.base = call; order = []}
+    }
+
+let is_terminating : t -> bool = fun n -> match n.solution with
+  | Vterm.Fix (tag, body) ->
+    let _ = print_string "  Checking termination..." in
+    (* instantiate a free var for the recursive call *)
+    let f = Vterm.Var (Vterm.Free (Name.of_string "f")) in
+    let tm = Vterm.instantiate_one f body in
+    
+    (* get the zipper *)
+    let zipper = Zipper.of_term tm in
+    let rec_binding = (tag.Vterm.f_var, Name.of_string "f", tag.Vterm.f_dt) in
+
+    (* now get all zippers looking at an f *)
+    let zips = zipper
+      |> Zipper.preorder_list n.root "" (fun tm -> tm = f) in
+
+    let uses = zips
+      |> CCList.map (fun z -> (
+          rec_binding :: (Zipper.scope z), 
+          z |> Zipper.calling_context |> Zipper.get
+        )
+      ) in
+    let _ = print_endline ((string_of_int (CCList.length uses)) ^ " use(s) found.") in
+
+    let check (scope, tm) = 
+      let _ = print_endline ("  + " ^ (Vterm.format tm)) in
+      let ans = match n.recursion with
+        | Some filter -> Termination.Filter.check scope filter tm
+        | _ -> false in
+      let _ = print_endline ("  | " ^ (string_of_bool ans)) in ans
+    in
+
+    let ans = CCList.for_all check uses in
+    let _ = print_endline ("  + done - " ^ (string_of_bool ans)) in ans
+  | _ -> true
 
 (* for wrapping in the priority structure *)
 type node = t

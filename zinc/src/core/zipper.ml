@@ -206,7 +206,7 @@ open CCOpt.Infix
 
 (* building up to preorder traversal *)
 let rec next (root : Name.t) (var : string) : t -> t option =
-    fun z -> 
+    fun z ->
         (right root var z) <+> ((up z) >>= (next root var))
 
 let preorder (root : Name.t) (var : string) : t -> t option =
@@ -218,6 +218,16 @@ let rec preorder_until (root : Name.t) (var : string) (pred : vterm -> bool) : t
         (CCOpt.if_ (fun c -> pred (get c)) z) <+>
         ((preorder root var z) >>= (preorder_until root var pred))
 
+let rec preorder_list (root : Name.t) (var : string) (pred : vterm -> bool) : t -> t list = fun z ->
+    match preorder_until root var pred z with
+        | Some z ->
+            let rest = z
+                |> preorder root var
+                |> CCOpt.map (preorder_list root var pred)
+                |> CCOpt.get_or ~default:[] in
+            z :: rest
+        | _ -> []
+    
 (* term to and from conversion *)
 let of_term : vterm -> t = fun tm -> (tm, [])
 let rec to_term : t -> vterm = fun z -> match up z with
@@ -225,14 +235,60 @@ let rec to_term : t -> vterm = fun z -> match up z with
     | _ -> get z
 
 (* scoping *)
-let bindings_of_branch : branch -> (Name.t * Dtype.t) list = function
-    | ZAbs (tag, n) -> [(tag.a_var, tag.a_dt)]
-    | ZMatchNatSucc (tag, _, _, n) -> [(tag.n_var, Dtype.Precise (Dtype.Natural tag.n_sens))]
-    | ZMatchConsCons (tag, _, _, _, _) -> 
-        [(tag.c_hd, tag.c_dt) ; (tag.c_tl, Dtype.Precise (Dtype.List (tag.c_sens, tag.c_dt)))]
-    | ZFix (tag, _) -> [(tag.f_var, tag.f_dt)]
-    | ZLetDrawUsage (tag, _, _) -> [(tag.d_var, tag.d_dt)]
+let bindings_of_branch : branch -> (Name.t * Name.t * Dtype.t) list = function
+    | ZAbs (tag, n) -> [(tag.a_var, n, tag.a_dt)]
+    | ZMatchNatSucc (tag, _, _, n) -> [(tag.n_var, n, Dtype.Precise (Dtype.Natural tag.n_sens))]
+    | ZMatchConsCons (tag, _, _, hd, tl) -> 
+        [(tag.c_hd, hd, tag.c_dt) ; (tag.c_tl, tl, Dtype.Precise (Dtype.List (tag.c_sens, tag.c_dt)))]
+    (* | ZFix (tag, n) -> [(tag.f_var, n, tag.f_dt)] *)
+    | ZLetDrawUsage (tag, _, n) -> [(tag.d_var, n, tag.d_dt)]
     | _ -> []
 
-let scope : t -> (Name.t * Dtype.t) list = function
+let scope : t -> (Name.t * Name.t * Dtype.t) list = function
     | (_, branches) -> CCList.flat_map bindings_of_branch branches
+
+let rec_binding : branch -> (Name.t * Name.t * Dtype.t) option = function
+    | ZFix (tag, n) -> Some (tag.f_var, n, tag.f_dt)
+    | _ -> None
+let rec_bindings : t -> (Name.t * Name.t * Dtype.t) list = function
+    | (_, branches) -> CCList.filter_map rec_binding branches
+
+(* assumes structure is: f x y ... z hole *)
+let base_call : t -> Name.t list = function
+    | (_, branches) -> let pred = function
+        | ZAbs (tag, _) -> Some tag.a_var
+        | ZFix (tag, _) -> Some tag.f_var
+        | _ -> None in
+    branches |> CCList.rev |> CCList.filter_map pred
+
+(* predicates for manipulating when to apply certain proposals *)
+let in_dist : t -> bool = function
+    | (_, branches) ->
+        let pred b = match b with
+            | ZLetDrawDist _ -> true
+            | _ -> false
+        in CCList.exists pred branches
+let in_usage : t -> bool = function
+    | (_, branches) ->
+        let pred b = match b with
+            | ZLetDrawUsage _ -> true
+            | _ -> false
+        in CCList.exists pred branches
+let in_nat_match : t -> bool = function
+    | (_, branches) ->
+        let pred b = match b with
+            | ZMatchNatE _ -> true
+            | ZMatchNatZero _ -> true
+            | ZMatchNatSucc _ -> true
+            | _ -> false
+        in CCList.exists pred branches
+            
+let to_string : t -> string = fun z ->
+    z |> set (Var (Free (Name.of_string "HOLE"))) |> to_term |> Vterm.to_string
+
+let rec calling_context : t -> t = function
+    | (tm, branch :: branches) as z -> begin match branch with
+        | ZAppLeft _ | ZAppRight _ -> up z |> CCOpt.get_exn |> calling_context
+        | _ -> z
+        end
+    | _ as z -> z

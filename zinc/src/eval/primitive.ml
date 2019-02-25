@@ -12,6 +12,7 @@ let to_proposal : t -> Subproblem.Proposal.t = fun p -> {
     wildcards = [];
     context = Context.concrete_of_var (Name.of_string p.name);
     obligation = Constraint.Top;
+    orderings = [];
   }
 
 module Utility = struct

@@ -6,6 +6,7 @@ type t = {
     hole : Zipper.t;
     context : Context.t;
     goal : Dtype.t;
+    recursion : Termination.Filter.t option;
 }
 
 type subproblem = t
@@ -16,7 +17,6 @@ let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
   | Vterm.Wild (context, dt, body) ->
     let wildcard = Vterm.Var (Vterm.Free (root <+ "HOLE")) in
     let body = Vterm.instantiate_one wildcard body in
-    let _ = print_endline (Vterm.format body) in
     let zipper_pred tm = match tm with
       | Vterm.Var (Vterm.Free n) -> Name.eq n (root <+ "HOLE")
       | _ -> false in
@@ -28,6 +28,7 @@ let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
         hole = z;
         context = context;
         goal = dt;
+        recursion = n.Node.recursion;
       }
       | _ -> failwith "can't find bound wildcard"
       end
@@ -40,10 +41,11 @@ module Proposal = struct
     wildcards : Zipper.branch list;
     context : Context.t;
     obligation : Constraint.t;
+    orderings : Termination.comparison list;
   }
 
   let to_string (p : t) : string =
-    let tm = Vterm.to_string p.solution in
+    let tm = Vterm.format p.solution in
     let dt = Dtype.to_string p.dtype in
       tm ^ " : " ^ dt
 
@@ -51,15 +53,47 @@ module Proposal = struct
   open Constraint.Alt
 
   let variables : subproblem -> t list = fun sp ->
-    let f = fun (n, dt) -> {
+    let f = fun (ref_n, n, dt) -> {
       solution = Vterm.Var (Vterm.Free n);
       dtype = dt;
       wildcards = [];
-      context = Context.concrete_of_var n;
+      context = Context.concrete_of_var ref_n;
       obligation = Constraint.Top;
+      orderings = [];
     } in
     let vars = Zipper.scope sp.hole in
       CCList.map f vars
+
+  let recursive : subproblem -> t list = fun sp ->
+    let f = fun (ref_n, n, dt) -> {
+      solution = Vterm.Var (Vterm.Free n);
+      dtype = dt;
+      wildcards = [];
+      context = Context.concrete_of_var ref_n;
+      obligation = Constraint.Top;
+      orderings = [];
+    } in
+    CCList.map f (Zipper.rec_bindings sp.hole)
+
+  let lazy_lambda : subproblem -> t = fun sp ->
+    let w = sp.root <+ "w" in
+    let wildcard = Vterm.Var (Vterm.Free w) in
+    let dom = Dtype.Free (sp.root <+ "dom") in
+    let codom = Dtype.Free (sp.root <+ "codom") in
+    let s = Sensitivity.Free (sp.root <+ "s") in
+    let tag = {
+      Vterm.a_var = sp.root <+ "x";
+      a_dt = dom;
+    } in
+    let context = Context.Symbolic (sp.root <+ "c") in
+    let bindings = [Zipper.ZWild (context, codom, w)] in {
+      solution = Vterm.Abs (tag, Vterm.Scope wildcard);
+      dtype = Dtype.Func (Dtype.Modal (s, dom), codom);
+      wildcards = bindings;
+      context = context;
+      obligation = c_rel (context ==. (sp.context +. (Context.Concrete (tag.a_var, s))));
+      orderings = [];
+    }
 
   let lambda : subproblem -> t option = fun sp -> match sp.goal with
     | Dtype.Func (Dtype.Modal (s, dom), codom) ->
@@ -76,8 +110,26 @@ module Proposal = struct
         wildcards = bindings;
         context = context;
         obligation = c_rel (context ==. (sp.context +. (Context.Concrete (tag.a_var, s))));
+        orderings = [];
       }
     | _ -> None
+  
+  let fix : subproblem -> t = fun sp ->
+    let w = sp.root <+ "w" in
+    let wildcard = Vterm.Var (Vterm.Free w) in
+    let tag = {
+      Vterm.f_var = sp.root <+ "f";
+      f_dt = sp.goal;
+    } in
+    let context = Context.Symbolic (sp.root <+ "c") in
+    let binding = Zipper.ZWild (context, sp.goal, w) in {
+      solution = Vterm.Fix (tag, Vterm.Scope wildcard);
+      dtype = sp.goal;
+      wildcards = [binding];
+      context = context;
+      obligation = Constraint.Top;
+      orderings = [];
+    }
 
   let rec specialize (root : Name.t) (prop : t) (context : Context.t) : t list =
     let recurse = match prop.dtype with
@@ -96,6 +148,7 @@ module Proposal = struct
           context = c;
           obligation = 
             prop.obligation & c_rel (c ==. (Context.Linear (prop.context, s, c_wild)));
+          orderings = [];
         } in specialize root p context
       | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KType ->
         let root = root <+ "step_tyabs" in
@@ -108,6 +161,7 @@ module Proposal = struct
           wildcards = prop.wildcards;
           context = c;
           obligation = c_rel (c ==. prop.context);
+          orderings = [];
         } in specialize root p context
       | Dtype.Quant (q, k, body) when q = Dtype.ForAll && k = Dtype.KSens ->
         let root = root <+ "step_sensabs" in
@@ -120,6 +174,7 @@ module Proposal = struct
           wildcards = prop.wildcards;
           context = c;
           obligation = c_rel (c ==. prop.context);
+          orderings = [];
         } in specialize root p context
       | _ -> []
     in {prop with obligation = prop.obligation & (c_rel (context ==. prop.context));} :: recurse
@@ -134,8 +189,10 @@ module Proposal = struct
         wildcards = [binding];
         context = sp.context;
         obligation = Constraint.Top;
+        orderings = [];
       }
-  let prob_return : subproblem -> t option = fun sp -> match sp.goal with
+  let prob_return : subproblem -> t option = fun sp -> 
+  if Zipper.in_dist sp.hole || Zipper.in_usage sp.hole then None else match sp.goal with
     | Dtype.Monad dt ->
       let w = sp.root <+ "w_ret" in
       let c = Context.Symbolic (sp.root <+ "c_ret") in
@@ -145,9 +202,11 @@ module Proposal = struct
         wildcards = [binding];
         context = c;
         obligation = c_rel (sp.context ==. (Sensitivity.Const (Rational.Infinity)) *. c);
+        orderings = [];
       }
     | _ -> None
-  let prob_draw : subproblem -> t option = fun sp -> match sp.goal with
+  let prob_draw : subproblem -> t option = fun sp -> 
+  if Zipper.in_dist sp.hole then None else match sp.goal with
     | Dtype.Monad dt ->
       (* what are we going to call the sampled value *)
       let x = sp.root <+ "x" in
@@ -173,13 +232,15 @@ module Proposal = struct
         context = c_dist +. c_usage';
         obligation = c_rel (c_usage ==. Context.Join (
           c_usage', Sensitivity.Const (Rational.Infinity) *. (Context.concrete_of_var x)
-        ))
+        ));
+        orderings = [];
       }
     | _ -> None
 
   (* pattern matching stuff *)
   let match_nat : subproblem -> t list = fun sp ->
-    let from_var (n, dt) = begin match dt with
+    if Zipper.in_nat_match sp.hole || Zipper.in_dist sp.hole then [] else
+    let from_var (ref_n, n, dt) = begin match dt with
       | Dtype.Precise (Dtype.Natural (Sensitivity.Free s)) ->
         (* names for matched variables and whatnot *)
         let root = Name.extend_by_name sp.root n in
@@ -214,7 +275,7 @@ module Proposal = struct
           wildcards = [zero_binding ; succ_binding];
           context = sp.context;
           obligation =
-            c_rel (sp.context ==. c_plain +. (r *. (Context.concrete_of_var n))) &
+            c_rel (sp.context ==. c_plain +. (r *. (Context.concrete_of_var ref_n))) &
             c_rel (c_zero ==. Context.Substitution (c_plain, Sensitivity.Sub.of_list [(s, Sensitivity.Alt.zero)])) &
             c_rel (c_succ ==. Context.Join (
               Context.Substitution (
@@ -222,13 +283,14 @@ module Proposal = struct
                 Sensitivity.Sub.of_list [(s, Sensitivity.Plus (i, Sensitivity.Alt.one))]),
               r *. Context.concrete_of_var x)
               );
+          orderings = [Termination.LT (x, ref_n)];
         }
       | _ -> None
       end in
     CCList.filter_map from_var (Zipper.scope sp.hole)
 
   let match_cons : subproblem -> t list = fun sp ->
-    let from_var (n, dt) = begin match dt with
+    let from_var (ref_n, n, dt) = begin match dt with
       | Dtype.Precise (Dtype.List (Sensitivity.Free s, tau)) ->
         (* names for matched variables and whatnot *)
         let root = Name.extend_by_name sp.root n in
@@ -266,7 +328,7 @@ module Proposal = struct
           wildcards = [nil_binding ; cons_binding];
           context = sp.context;
           obligation =
-            c_rel (sp.context ==. c_plain +. (r *. (Context.concrete_of_var n))) &
+            c_rel (sp.context ==. c_plain +. (r *. (Context.concrete_of_var ref_n))) &
             c_rel (c_nil ==. Context.Substitution (c_plain, Sensitivity.Sub.of_list [(s, Sensitivity.Alt.zero)])) &
             c_rel (c_cons ==. Context.Join (
               Context.Substitution (
@@ -276,21 +338,47 @@ module Proposal = struct
                 r *. (Context.concrete_of_var y),
                 r *. (Context.concrete_of_var x)
               )
-            ))
+            ));
+          orderings = [Termination.LT (x, n)];
         }
 
       | _ -> None
     end in CCList.filter_map from_var (Zipper.scope sp.hole)
+
+  (* let terminating_recursive (subprob : subproblem) : t list =
+    let root = subprob.root <+ "term_rec" in match subprob.recursion with
+      | Some filter -> subprob
+        |> recursive
+        |> CCList.flat_map (fun p -> specialize root p subprob.context)
+        |> CCList.filter (fun p -> Termination.Filter.check filter p.solution)
+      | _ -> [] *)
 end
 
 let insert_proposal (p : Proposal.t) (subprob : t) : Node.t option = let open Constraint.Alt in
   match Inference.subtype_unify subprob.root subprob.goal p.Proposal.dtype with
     | Some (phi, sub) -> Some {
       Node.root = subprob.root;
+      recursion = begin match subprob.recursion with
+        | Some filter -> Some (CCList.fold_left Termination.Filter.add filter p.Proposal.orderings)
+        | _ -> None
+      end;
       obligation = phi & p.Proposal.obligation & subprob.obligation;
       solution =
         let body = Zipper.set p.solution subprob.hole |> Zipper.to_term in
         let tm = Zipper.to_term (body, p.wildcards) in
-          Inference.Sub.apply_vterm sub tm
+          Inference.Sub.apply_vterm sub tm;
     }
+    | _ -> None
+
+let lift (root : Name.t) : (t -> Proposal.t option) -> Node.t -> Node.t option = fun pg -> fun n ->
+  let sp = of_node root n in match pg sp with
+    | Some prop -> insert_proposal prop sp
+    | _ -> None
+
+let lift_proposal : (t -> Proposal.t option) -> t -> t option = fun prop_gen -> fun sp ->
+  match prop_gen sp with
+    | Some proposal -> begin match insert_proposal proposal sp with
+      | Some node -> Some (of_node (sp.root <+ "lift") node)
+      | _ -> None
+      end
     | _ -> None

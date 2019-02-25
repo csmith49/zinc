@@ -462,7 +462,7 @@ and format' (tm : t) (s : Name.Stream.t) : string * Name.Stream.t = match tm wit
     | App (l, r) ->
         let l, s = format' l s in
         let r, s = format' r s in
-            (l ^ " (" ^ r ^ ")", s)
+            (l ^ " " ^ r, s)
     | MatchNat (tag, e, zero, succ) ->
         let e, s = format' e s in
         let zero, s = format' zero s in
@@ -496,10 +496,9 @@ and format' (tm : t) (s : Name.Stream.t) : string * Name.Stream.t = match tm wit
     | Pair (l, r) ->
         let l, s = format' l s in
         let r, s = format' r s in
-            (l ^ " * " ^ r, s)
+            ("(" ^ l ^ ", " ^ r ^ ")", s)
     | Real f -> string_of_float f, s
-    | Bag ts ->
-        "BAG", s
+    | Bag ts -> "BAG", s
     | Function (id, _) -> id, s
     | Fix (_, body) ->
         let x, s = Name.Stream.draw_fix s in
