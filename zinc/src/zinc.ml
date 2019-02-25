@@ -180,8 +180,9 @@ let synthesize (bm : Iterative.benchmark) : unit =
 
         (* extend solutions with pattern matching  *)
         let solutions = solutions 
-          @ (Subproblem.Proposal.match_nat subproblem) in
-          (* @ (Subproblem.Proposal.match_cons subproblem) in *)
+          @ (Subproblem.Proposal.match_nat subproblem)
+          @ (Subproblem.Proposal.match_cons subproblem)
+          @ [] in
 
         (* add probability layer *)
         let solutions = solutions

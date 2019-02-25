@@ -125,7 +125,36 @@ let db = Dtype.Base "db"
 let idc_sens = let open Sensitivity.Alt in
     two *! n *! eps
 
+(* utilities for implementation *)
+let list_to_bag : float list -> Vterm.t = fun fs -> fs
+    |> CCList.map Vterm.Alt.real |> Vterm.Alt.bag
+let bag_to_list : Vterm.t -> float list option = function
+    | Vterm.Bag ts -> ts |> CCList.map Vterm.eval |> CCList.map Vterm.Evaluation.to_real |> CCOpt.sequence_l
+    | _ -> None
+
+let rec cross_product : float list -> float list -> float = fun ls -> fun rs -> match ls, rs with
+    | l :: ls, r :: rs ->
+        (l *. r) +. (cross_product ls rs)
+    | [], [] -> 0.0
+    | _ -> failwith "no"
+
 (* three primitives to build off of *)
+
+(* evaluating linear queries - they're one-sensitive, so easy type *)
+(* query -> db -o_1 real *)
+let eval_q = {
+    Primitive.name = "eval_q";
+    dtype = query => (modal (one, db) -* real);
+    source = Vterm.Function ("eval_q", fun q ->
+        Vterm.Value (Vterm.Function ("eval_q q", fun db ->
+            match Vterm.eval q, Vterm.eval db with
+                | Vterm.Value q, Vterm.Value db -> begin match bag_to_list q, bag_to_list db with
+                    | Some q, Some db -> Vterm.Value (cross_product q db |> Vterm.Alt.real)
+                    | _ -> Vterm.Diverge
+                end
+                | _ -> Vterm.Diverge
+        )));
+}
 
 (* privacy distinguisher *)
 (* query bag -> approx_db -> db -o_e prob query *)
@@ -151,16 +180,6 @@ let dua = {
             )))));
 }
 
-(* evaluating linear queries - they're one-sensitive, so easy type *)
-(* query -> db -o_1 real *)
-let eval_q = {
-    Primitive.name = "eval_q";
-    dtype = query => (modal (one, db) -* real);
-    source = Vterm.Function ("eval_q", fun q ->
-        Vterm.Value (Vterm.Function ("eval_q q", fun db ->
-            Vterm.Diverge
-        )));
-}
 (* and a mechanism for adding noise *)
 (* real -*_1 prob real *)
 let add_noise = {
@@ -230,6 +249,15 @@ let split_pred = {
         )))
 }
 
+let bag_split_lt = {
+    Primitive.name = "bag_split_lt";
+    dtype = real => (modal (one, bag real) -* pair (bag real, bag real));
+    source = Vterm.Function ("bag_split_lt", fun r ->
+        Vterm.Value (Vterm.Function ("bag_split_lt r", fun b ->
+            Vterm.App (bag_split.source, Vterm.App (split_pred.source, r)) |> Vterm.eval
+        )))
+}
+
 (* pair manipulation stuff *)
 let p_fst = {
     Primitive.name = "fst";
@@ -272,11 +300,36 @@ let cons = {
 let cdf_sens = let open Sensitivity.Alt in
     k *! eps
 
+(* example construction *)
+let db_1 = [
+    0.5 ; 1.5; 1.5; 2.5; 3.5 ;
+] |> CCList.map Vterm.Alt.real |> Vterm.Alt.bag
+
+let bucket_0 = Vterm.Alt.conslist []
+let bucket_1 = [
+    2.0
+] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+let bucket_2 = [
+    1.0 ; 2.0
+] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+
+let result_0 = Vterm.Alt.conslist []
+let result_1 = [
+    3.0
+] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+let result_2 = [
+    1.0 ; 2.0
+] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+
 let cdf = {
     name = "cdf";
     goal = p_list (real, k) => (modal (cdf_sens, bag real) -* prob (p_list (real, k)));
-    examples = [];
-    signature = [bag_size ; bag_split ; split_pred ; p_fst ; p_snd ; nil ; cons ; add_noise];
+    examples = [
+        ( [bucket_0 ; db_1], result_0 );
+        ( [bucket_1 ; db_1], result_1 );
+        ( [bucket_2 ; db_1], result_2 );
+    ];
+    signature = [bag_size ; bag_split_lt ; p_fst ; p_snd ; nil ; cons ; add_noise];
 }
 
-let all = [kmeans ; idc]
+let all = [kmeans ; idc ; cdf]

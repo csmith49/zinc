@@ -274,6 +274,13 @@ let in_usage : t -> bool = function
             | ZLetDrawUsage _ -> true
             | _ -> false
         in CCList.exists pred branches
+let sample_depth : t -> int = function
+    | (_, branches) ->
+        let pred b = match b with
+            | ZLetDrawDist _ -> true
+            | ZLetDrawUsage _ -> true
+            | _ -> false
+        in CCList.count pred branches
 let in_nat_match : t -> bool = function
     | (_, branches) ->
         let pred b = match b with
@@ -282,6 +289,15 @@ let in_nat_match : t -> bool = function
             | ZMatchNatSucc _ -> true
             | _ -> false
         in CCList.exists pred branches
+let in_cons_match : t -> bool = function
+    | (_, branches) ->
+        let pred b = match b with
+            | ZMatchConsE _ -> true
+            | ZMatchConsNil _ -> true
+            | ZMatchConsCons _ -> true
+            | _ -> false
+        in CCList.exists pred branches
+let in_match : t -> bool = fun z -> (in_nat_match z) || (in_cons_match z)
             
 let to_string : t -> string = fun z ->
     z |> set (Var (Free (Name.of_string "HOLE"))) |> to_term |> Vterm.to_string

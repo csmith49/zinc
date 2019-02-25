@@ -206,7 +206,8 @@ module Proposal = struct
       }
     | _ -> None
   let prob_draw : subproblem -> t option = fun sp -> 
-  if Zipper.in_dist sp.hole then None else match sp.goal with
+  if Zipper.in_dist sp.hole then None else
+  if Zipper.sample_depth sp.hole > 3 then None else match sp.goal with
     | Dtype.Monad dt ->
       (* what are we going to call the sampled value *)
       let x = sp.root <+ "x" in
@@ -239,7 +240,7 @@ module Proposal = struct
 
   (* pattern matching stuff *)
   let match_nat : subproblem -> t list = fun sp ->
-    if Zipper.in_nat_match sp.hole || Zipper.in_dist sp.hole then [] else
+    if Zipper.in_match sp.hole || Zipper.in_dist sp.hole then [] else
     let from_var (ref_n, n, dt) = begin match dt with
       | Dtype.Precise (Dtype.Natural (Sensitivity.Free s)) ->
         (* names for matched variables and whatnot *)
@@ -290,6 +291,7 @@ module Proposal = struct
     CCList.filter_map from_var (Zipper.scope sp.hole)
 
   let match_cons : subproblem -> t list = fun sp ->
+    if Zipper.in_match sp.hole then [] else
     let from_var (ref_n, n, dt) = begin match dt with
       | Dtype.Precise (Dtype.List (Sensitivity.Free s, tau)) ->
         (* names for matched variables and whatnot *)
