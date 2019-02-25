@@ -48,7 +48,7 @@ open Make
 (* for k-means - we operate over points *)
 let point = pair (real, real)
 (* and have a precise sensitivity constraint *)
-let sens = Sensitivity.Mult (eps, n)
+let k_sens = Sensitivity.Mult (eps, n)
 
 (* primitives for kmeans *)
 let k_step = {
@@ -95,7 +95,7 @@ let kmeans = {
     goal = 
     (* sbind (k, sbind (n,  *)
         (p_int n) => (
-            (p_list (point, k)) => (modal (sens, bag point) -* prob (p_list (point, k)))
+            (p_list (point, k)) => (modal (k_sens, bag point) -* prob (p_list (point, k)))
         );
         (* )); *)
     examples = [
@@ -112,4 +112,171 @@ let kmeans = {
     signature = [k_step];
 }
 
-let all = [kmeans]
+(* IDC *)
+
+(* operate over queries *)
+let query = Dtype.Base "query"
+(* and approx_dbs *)
+let approx_db = Dtype.Base "approx_db"
+(* with base dbs *)
+let db = Dtype.Base "db"
+
+(* sensitivity *)
+let idc_sens = let open Sensitivity.Alt in
+    two *! n *! eps
+
+(* three primitives to build off of *)
+
+(* privacy distinguisher *)
+(* query bag -> approx_db -> db -o_e prob query *)
+let pa = {
+    Primitive.name = "pa";
+    dtype = (bag query) => (approx_db => (modal (eps, db) -* (prob query)));
+    source = Vterm.Function ("pa", fun queries ->
+        Vterm.Value (Vterm.Function ("pa qs", fun approx ->
+            Vterm.Value (Vterm.Function ("pa qs a", fun db ->
+                Vterm.Diverge
+            )))));
+}
+
+(* database update algorithm *)
+(* approx_db -> query -> real -> approx_db *)
+let dua = {
+    Primitive.name = "dua";
+    dtype = approx_db => (query => (real => approx_db));
+    source = Vterm.Function ("dua", fun approx ->
+        Vterm.Value (Vterm.Function ("dua a", fun q ->
+            Vterm.Value (Vterm.Function ("dua a q", fun result ->
+                Vterm.Diverge
+            )))));
+}
+
+(* evaluating linear queries - they're one-sensitive, so easy type *)
+(* query -> db -o_1 real *)
+let eval_q = {
+    Primitive.name = "eval_q";
+    dtype = query => (modal (one, db) -* real);
+    source = Vterm.Function ("eval_q", fun q ->
+        Vterm.Value (Vterm.Function ("eval_q q", fun db ->
+            Vterm.Diverge
+        )));
+}
+(* and a mechanism for adding noise *)
+(* real -*_1 prob real *)
+let add_noise = {
+    Primitive.name = "add_noise";
+    dtype = modal (eps, real) -* real;
+    source = Vterm.Function ("add_noise", fun v -> Vterm.Value v);
+}
+
+(* constant for representing our initial approximation *)
+let init_approx = {
+    Primitive.name = "init_approx";
+    dtype = approx_db;
+    source = Vterm.Nat Vterm.Zero;
+}
+
+let idc = {
+    name = "idc";
+    goal = (p_int n) => (bag query => (modal (idc_sens, db) -* (prob approx_db)));
+    examples = [];
+    signature = [pa ; dua ; eval_q ; add_noise ; init_approx];
+}
+
+(* CUMULATIVE DENSITY FUNCTION *)
+
+(* primitives for computing cdf *)
+
+(* size of bags - databases, here *)
+let bag_size = {
+    Primitive.name = "bag_size";
+    dtype = modal (one, bag real) -* real;
+    source = Vterm.Function ("bag_size", fun b -> match b with
+        | Vterm.Bag ts -> ts
+            |> CCList.length
+            |> float_of_int
+            |> Vterm.Evaluation.of_real
+        | _ -> Vterm.Diverge        
+    )
+}
+
+(* filter bag into parts via a predicate *)
+let bag_split = {
+    Primitive.name = "bag_split";
+    dtype = (real => bool) => (modal (one, bag real) -* pair (bag real, bag real));
+    source = Vterm.Function ("bag_split", fun pred ->
+        Vterm.Value (Vterm.Function ("bag_split p", fun b -> match b with
+            | Vterm.Bag ts -> let rec split ts = begin match ts with
+                | [] -> Vterm.Value (Vterm.Pair (Vterm.Bag [], Vterm.Bag []))
+                | x :: xs -> begin match split xs with
+                    | Vterm.Value (Vterm.Pair (Vterm.Bag ls, Vterm.Bag rs)) ->
+                        if Vterm.App (pred, x) |> Vterm.eval |> Vterm.Evaluation.is_true then
+                            Vterm.Value (Vterm.Pair (Vterm.Bag (x :: ls), Vterm.Bag rs))
+                        else
+                            Vterm.Value (Vterm.Pair (Vterm.Bag ls, Vterm.Bag (x :: rs)))
+                    | _ -> Vterm.Diverge
+                    end
+                end in split ts
+            | _ -> Vterm.Diverge
+        )))
+}
+(* constructor for the relevant pred *)
+let split_pred = {
+    Primitive.name = "split_pred";
+    dtype = real => (real => bool);
+    source = Vterm.Function ("split_pred", fun r ->
+        Vterm.Value (Vterm.Function ("split_pred r", fun x ->
+            Vterm.Evaluation.real_gt (Vterm.eval x) (Vterm.eval r) |> Vterm.Evaluation.of_bool
+        )))
+}
+
+(* pair manipulation stuff *)
+let p_fst = {
+    Primitive.name = "fst";
+    dtype = tbind (
+        a, modal (one, pair (a, a)) -* a
+    );
+    source = Vterm.Function ("fst", fun p -> match p with
+        | Vterm.Pair (tm, _) -> Vterm.Value tm
+        | _ -> Vterm.Diverge);
+}
+(* pair manipulation stuff *)
+let p_snd = {
+    Primitive.name = "snd";
+    dtype = tbind (
+        a, modal (one, pair (a, a)) -* a
+    );
+    source = Vterm.Function ("snd", fun p -> match p with
+        | Vterm.Pair (_, tm) -> Vterm.Value tm
+        | _ -> Vterm.Diverge);
+}
+
+(* list manipulation *)
+let nil = {
+    Primitive.name = "nil";
+    dtype = p_list (real, zero);
+    source = Vterm.ConsList (Vterm.Nil);
+}
+let cons = {
+    Primitive.name = "cons";
+    dtype = sbind (k, 
+        modal (one, real) -* (modal (one, p_list (real, k)) -* (p_list (real, Sensitivity.Plus (k, one))))
+    );
+    source = Vterm.Function ("cons", fun hd ->
+        Vterm.Value (Vterm.Function ("cons hd", fun tl ->
+            Vterm.Value (Vterm.ConsList (Vterm.Cons (hd, tl)))
+        )));
+}
+
+(* overall sensitivity *)
+let cdf_sens = let open Sensitivity.Alt in
+    k *! eps
+
+let cdf = {
+    name = "cdf";
+    goal = p_list (real, k) => (modal (cdf_sens, bag real) -* prob (p_list (real, k)));
+    examples = [];
+    signature = [bag_size ; bag_split ; split_pred ; p_fst ; p_snd ; nil ; cons ; add_noise];
+}
+
+let all = [kmeans ; idc]
