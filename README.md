@@ -1,6 +1,6 @@
 # Zinc
 
-Zinc is a sensitivity-aware type-directed synthesis tool for constructing inputs to differentially private mechanisms. It is based on the [DFuzz type system](http://www.cis.upenn.edu/~ahae/papers/dfuzz-popl2013.pdf), and extends Hindley-Milner type-directed synthesis approach of [BigLambda](https://dl.acm.org/citation.cfm?id=2908102) to the full System F.
+Zinc is a sensitivity-aware type-directed synthesis tool for constructing inputs to differentially private mechanisms. It is based on the [DFuzz type system](http://www.cis.upenn.edu/~ahae/papers/dfuzz-popl2013.pdf), and extends Hindley-Milner type-directed synthesis approach of [BigLambda](https://dl.acm.org/citation.cfm?id=2908102).
 
 ## Installation and prerequisites
 
