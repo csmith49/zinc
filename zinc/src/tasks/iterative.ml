@@ -310,7 +310,11 @@ module IDC = struct
     let init_approx = {
         Primitive.name = "init_approx";
         dtype = approx_db;
-        source = list_to_bag [1.0; 1.0; 1.0;];
+        source = Vterm.Bag [
+            Vterm.Real 1.0;
+            Vterm.Real 1.0;
+            Vterm.Real 1.0;
+        ]
     }
 
     module Solution = struct
@@ -375,15 +379,32 @@ module IDC = struct
 
     let db_1 = list_to_bag [2.0; 1.0; 3.0]
 
-    let result_0 = init_approx.source
-    let result_1 = update_adb [1.0; 1.0; 1.0] [0.0; 0.0; 1.0] 3.0
+    let queries = [
+        [1.0; 0.0; 0.0];
+        [0.0; 1.0; 0.0];
+        [0.0; 0.0; 1.0];
+    ]
+    let data = [2.0; 1.0; 3.0]
+    let exec adb = 
+        let q = select_query queries adb data in
+        let d = cross_product q data in
+            update_adb adb q d
+
+    let result_0 = [1.0; 1.0; 1.0]
+    let result_1 = exec result_0
+    let result_2 = exec result_1
+
+    let query_bag = queries
+        |> CCList.map list_to_bag
+        |> fun ls -> Vterm.Bag ls
 
     let benchmark = {
         name = "idc";
         goal = (p_int n) => (bag query => (modal (sens, db) -* (prob approx_db)));
         examples = [
-            ([Vterm.Alt.nat 0 ; queries ; db_1], result_0);
-            ([Vterm.Alt.nat 1 ; queries ; db_1], result_1 |> list_to_bag);
+            ([Vterm.Alt.nat 0 ; query_bag ; db_1], result_0 |> list_to_bag);
+            ([Vterm.Alt.nat 1 ; query_bag ; db_1], result_1 |> list_to_bag);
+            ([Vterm.Alt.nat 2 ; query_bag ; db_1], result_2 |> list_to_bag);
         ];
         signature = [pa ; dua ; eval_noisy ; init_approx];
         template = Solution.template;
@@ -462,7 +483,7 @@ module CDF = struct
     (* real -*_e prob real *)
     let add_noise = {
         Primitive.name = "add_noise";
-        dtype = modal (eps, real) -* real;
+        dtype = modal (eps, real) -* prob real;
         source = Vterm.Function ("add_noise", fun v -> Vterm.Value v);
     }
 
@@ -529,7 +550,7 @@ module CDF = struct
 
     (* example construction *)
     let db_1 = [
-        0.5 ; 1.5; 1.5; 2.5; 3.5 ;
+        0.5 ; 1.5; 2.5; 1.5; 3.5 ;
     ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.bag
 
     let bucket_0 = Vterm.Alt.conslist []
@@ -539,6 +560,10 @@ module CDF = struct
     let bucket_2 = [
         1.0 ; 2.0
     ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+    let bucket_3 = [
+        1.0 ; 2.0; 3.0
+    ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+
 
     let result_0 = Vterm.Alt.conslist []
     let result_1 = [
@@ -546,6 +571,9 @@ module CDF = struct
     ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
     let result_2 = [
         1.0 ; 2.0
+    ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
+    let result_3 = [
+        1.0 ; 2.0; 1.0
     ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
 
     let benchmark = {
@@ -555,6 +583,7 @@ module CDF = struct
             ( [bucket_0 ; db_1], result_0 );
             ( [bucket_1 ; db_1], result_1 );
             ( [bucket_2 ; db_1], result_2 );
+            ( [bucket_3 ; db_1], result_3 );
         ];
         signature = [bag_size ; bag_lt ; bag_geq ; nil ; cons ; add_noise];
         template = Solution.template;

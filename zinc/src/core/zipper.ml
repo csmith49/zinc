@@ -126,7 +126,7 @@ let right (root : Name.t) (var : string) : t -> t option = function
                 | ZPairLeft r ->
                     Some (r, ZPairRight tm :: branches)
                 | ZBag (ls, r :: rs) ->
-                    Some (r, ZBag (ls, rs) :: branches)
+                    Some (r, ZBag (ls @ [tm], rs) :: branches)
                 
                 (* probability *)
                 | ZLetDrawDist (dt, usage) ->

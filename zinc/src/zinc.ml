@@ -16,7 +16,7 @@ let template = ref false
 let holes = ref 0
 
 (* the references for the weights, a little overly verbose *)
-let p_weight_1 = ref 4
+let p_weight_1 = ref 7
 let p_weight_2 = ref 2
 let p_weight_3 = ref 0
 let p_weight_4 = ref (-1)

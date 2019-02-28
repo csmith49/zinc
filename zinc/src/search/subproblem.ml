@@ -217,7 +217,7 @@ module Proposal = struct
         orderings = [];
       }
   let prob_return : subproblem -> t option = fun sp -> 
-  if Zipper.in_dist sp.hole || Zipper.in_usage sp.hole then None else match sp.goal with
+  if Zipper.in_dist sp.hole then None else match sp.goal with
     | Dtype.Monad dt ->
       let w = sp.root <+ "w_ret" in
       let c = Context.Symbolic (sp.root <+ "c_ret") in
