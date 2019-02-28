@@ -138,6 +138,30 @@ let rec cross_product : float list -> float list -> float = fun ls -> fun rs -> 
     | [], [] -> 0.0
     | _ -> failwith "no"
 
+let rec select_query : (float list) list -> (float list) -> (float list) -> float list = fun qs -> fun adb -> fun db ->
+    match qs with
+        | [] -> failwith "nah"
+        | q :: [] -> q
+        | q :: qs ->
+            let rest = select_query qs adb db in
+            let q_perf = Float.abs (
+                (cross_product q adb) -. (cross_product q db)
+            ) in
+            let r_perf = Float.abs (
+                (cross_product rest adb) -. (cross_product rest db)
+            ) in if q_perf > r_perf then q else rest
+
+let rec update_adb : (float list) -> (float list) -> float -> float list = fun adb -> fun query -> fun ans ->
+    let a_ans = cross_product adb query in update_adb' adb query a_ans ans
+and update_adb' adb query a_ans ans =
+    match adb, query with
+        | x :: xs, q :: qs ->
+            let rest = update_adb' xs qs a_ans ans in
+            let x' = x *. Float.exp(q *. (ans -. a_ans) /. 2.0) in
+                x' :: rest
+        | [], [] -> []
+        | _ -> failwith "ill-formed"
+
 (* three primitives to build off of *)
 
 (* evaluating linear queries - they're one-sensitive, so easy type *)
@@ -147,11 +171,8 @@ let eval_q = {
     dtype = query => (modal (one, db) -* real);
     source = Vterm.Function ("eval_q", fun q ->
         Vterm.Value (Vterm.Function ("eval_q q", fun db ->
-            match Vterm.eval q, Vterm.eval db with
-                | Vterm.Value q, Vterm.Value db -> begin match bag_to_list q, bag_to_list db with
-                    | Some q, Some db -> Vterm.Value (cross_product q db |> Vterm.Alt.real)
-                    | _ -> Vterm.Diverge
-                end
+            match bag_to_list q, bag_to_list db with
+                | Some q, Some db -> Vterm.Value (cross_product q db |> Vterm.Alt.real)
                 | _ -> Vterm.Diverge
         )));
 }
@@ -164,7 +185,17 @@ let pa = {
     source = Vterm.Function ("pa", fun queries ->
         Vterm.Value (Vterm.Function ("pa qs", fun approx ->
             Vterm.Value (Vterm.Function ("pa qs a", fun db ->
-                Vterm.Diverge
+                match Vterm.eval queries with
+                    | Vterm.Value (Vterm.Bag queries) -> begin
+                        match queries |> CCList.map bag_to_list |> CCOpt.sequence_l with
+                            | Some queries -> begin match bag_to_list approx, bag_to_list db with
+                                | Some adb, Some db ->
+                                    Vterm.Value (select_query queries adb db |> list_to_bag)
+                                | _ -> Vterm.Diverge
+                            end
+                            | _ -> Vterm.Diverge
+                        end
+                    | _ -> Vterm.Diverge
             )))));
 }
 
@@ -176,7 +207,10 @@ let dua = {
     source = Vterm.Function ("dua", fun approx ->
         Vterm.Value (Vterm.Function ("dua a", fun q ->
             Vterm.Value (Vterm.Function ("dua a q", fun result ->
-                Vterm.Diverge
+                match bag_to_list approx, bag_to_list q, Vterm.eval result with
+                    | Some adb, Some q, Vterm.Value (Vterm.Real r) ->
+                        Vterm.Value (update_adb adb q r |> list_to_bag)
+                    | _ -> Vterm.Diverge
             )))));
 }
 
@@ -192,13 +226,34 @@ let add_noise = {
 let init_approx = {
     Primitive.name = "init_approx";
     dtype = approx_db;
-    source = Vterm.Nat Vterm.Zero;
+    source = list_to_bag [1.0; 1.0; 1.0;];
 }
+
+let q_1 = list_to_bag [1.0; 0.0; 0.0;]
+let q_2 = list_to_bag [0.0; 1.0; 0.0;]
+let q_3 = list_to_bag [0.0; 0.0; 1.0;]
+let queries = Vterm.Bag [
+    q_1;
+    q_2;
+    q_3;
+]
+
+let db_1 = list_to_bag [2.0; 1.0; 3.0]
+
+let result_0 = init_approx.source
+let result_1 = update_adb [2.0; 1.0; 3.0] [0.0; 0.0; 1.0] 3.0
+let result_2 = let q = select_query [
+    [1.0; 0.0; 0.0;] ; [0.0; 1.0; 0.0;] ; [0.0; 0.0; 1.0;]
+] result_1 [2.0; 1.0; 3.0] in update_adb result_1 q (cross_product result_1 [2.0; 1.0; 3.0])
+
 
 let idc = {
     name = "idc";
     goal = (p_int n) => (bag query => (modal (idc_sens, db) -* (prob approx_db)));
-    examples = [];
+    examples = [
+        ([Vterm.Alt.nat 0 ; queries ; db_1], result_0);
+        ([Vterm.Alt.nat 1 ; queries ; db_1], result_1 |> list_to_bag);
+    ];
     signature = [pa ; dua ; eval_q ; add_noise ; init_approx];
 }
 

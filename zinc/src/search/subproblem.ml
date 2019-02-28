@@ -13,7 +13,32 @@ type subproblem = t
 
 open Name.Alt
 
-let of_node (root : Name.t) (n : Node.t) : t = match n.Node.solution with
+let rec of_node (skip : int) (root : Name.t) (n : Node.t) : t option =
+  match Zipper.down_n n.Node.root "x" skip (Zipper.of_term n.Node.solution) with
+    | Some (tm, branches) -> begin match tm with
+      | Vterm.Wild (context, dt, body) ->
+        let wildcard = Vterm.Var (Vterm.Free (root <+ "HOLE")) in
+        let body = Vterm.instantiate_one wildcard body in
+        let zipper_pred tm = match tm with
+          | Vterm.Var (Vterm.Free n) -> Name.eq n (root <+ "HOLE")
+          | _ -> false in
+        let zipper = Zipper.preorder_until root "x" zipper_pred (body, branches) in
+        begin match zipper with
+          | Some z -> Some {
+            root = root <+ "node";
+            obligation = n.Node.obligation;
+            hole = z;
+            context = context;
+            goal = dt;
+            recursion = n.Node.recursion;
+          }
+          | _ -> None
+        end
+      | _ -> None
+      end
+    | _ -> None
+
+and of_node' (root : Name.t) (n : Node.t) : t = match n.Node.solution with
   | Vterm.Wild (context, dt, body) ->
     let wildcard = Vterm.Var (Vterm.Free (root <+ "HOLE")) in
     let body = Vterm.instantiate_one wildcard body in
@@ -361,26 +386,26 @@ let insert_proposal (p : Proposal.t) (subprob : t) : Node.t option = let open Co
     | Some (phi, sub) -> Some {
       Node.root = subprob.root;
       recursion = begin match subprob.recursion with
-        | Some filter -> Some (CCList.fold_left Termination.Filter.add filter p.Proposal.orderings)
+        | Some filter -> Some (Termination.Filter.add_list filter p.Proposal.orderings)
         | _ -> None
       end;
       obligation = phi & p.Proposal.obligation & subprob.obligation;
       solution =
         let body = Zipper.set p.solution subprob.hole |> Zipper.to_term in
-        let tm = Zipper.to_term (body, p.wildcards) in
+        let tm = Zipper.to_term (body, p.wildcards |> CCList.rev) in
           Inference.Sub.apply_vterm sub tm;
     }
     | _ -> None
 
 let lift (root : Name.t) : (t -> Proposal.t option) -> Node.t -> Node.t option = fun pg -> fun n ->
-  let sp = of_node root n in match pg sp with
+  let sp = of_node 0 root n |> CCOpt.get_exn in match pg sp with
     | Some prop -> insert_proposal prop sp
     | _ -> None
 
 let lift_proposal : (t -> Proposal.t option) -> t -> t option = fun prop_gen -> fun sp ->
   match prop_gen sp with
     | Some proposal -> begin match insert_proposal proposal sp with
-      | Some node -> Some (of_node (sp.root <+ "lift") node)
+      | Some node -> (of_node 0 (sp.root <+ "lift") node) 
       | _ -> None
       end
     | _ -> None

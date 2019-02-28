@@ -308,3 +308,6 @@ let rec calling_context : t -> t = function
         | _ -> z
         end
     | _ as z -> z
+
+let rec down_n (root : Name.t) (var : string) (n : int) : t -> t option = fun z ->
+    if n = 0 then Some z else z |> down root var |> CCOpt.flat_map (down_n root var (n - 1))

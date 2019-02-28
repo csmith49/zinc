@@ -21,6 +21,12 @@ let scope_to_string : scope -> string = fun s -> s
     |> CCList.map (fun (ref_n, n, _) -> (Name.to_string ref_n) ^ " -> " ^ (Name.to_string n))
     |> CCString.concat " & "
 
+let comparison_to_string : comparison -> string = function
+    | LT (l, r) -> (Name.to_string l) ^ " < " ^ (Name.to_string r)
+let po_to_string : po -> string = fun cs -> cs
+    |> CCList.map comparison_to_string
+    |> CCString.concat ", "
+
 (* the order defined *)
 let rec is_lt (order : po) : Name.t -> Name.t -> bool = fun l -> fun r ->
     if CCList.mem ~eq:(=) (l <! r) order then true else order
@@ -33,13 +39,14 @@ module Call = struct
 
     let rec context_lt (order : po) : scope -> context -> t -> bool = fun scope -> fun context -> fun call ->
         match context, call with
-            | l :: ls, r :: rs -> 
+            | l :: ls, r :: rs ->
                 begin match find scope l with
                 | Some n ->
                     if is_lt order n r then true else
                         if Name.eq n r then context_lt order scope ls rs
                         else false
-                | _ -> false
+                | _ -> 
+                    false
             end
             | _ -> false
 end
@@ -50,8 +57,16 @@ module Filter = struct
         order : po;
     }
 
+    let to_string : t -> string = fun f ->
+        let b' = f.base |> CCList.map Name.to_string |> CCString.concat "; " in
+        let o' = po_to_string f.order in
+            b' ^ " w/order: " ^ o'
+
     let add : t -> comparison -> t = fun f -> fun c -> {
         f with order = c :: f.order
+    }
+    let add_list : t -> comparison list -> t = fun f -> fun cs -> {
+        f with order = cs @ f.order
     }
     
     let check (scope : scope) : t -> Vterm.t -> bool = fun f -> fun tm ->

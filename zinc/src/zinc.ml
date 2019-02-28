@@ -14,10 +14,10 @@ let counting = ref false
 let sizing = ref false
 
 (* the references for the weights, a little overly verbose *)
-let p_weight_1 = ref 1
-let p_weight_2 = ref 0
-let p_weight_3 = ref 10
-let p_weight_4 = ref 0
+let p_weight_1 = ref 4
+let p_weight_2 = ref 2
+let p_weight_3 = ref 0
+let p_weight_4 = ref (-1)
 
 (* the actual command line arguments *)
 let spec_list = [
@@ -108,17 +108,19 @@ let synthesize (bm : Iterative.benchmark) : unit =
   let start_node = start_node 
     |> fix
     >>= get_args
-    |> CCOpt.get_exn
-    in
-  
-  let rec_call = start_node 
-    |> Subproblem.of_node (Name.of_string "recursion") 
-    |> (fun sp -> sp.Subproblem.hole) 
-    |> Zipper.base_call in
-  
-  let start_node = Node.add_filter start_node rec_call in
+    |> CCOpt.get_exn in
 
-  let _ = frontier := Frontier.push weights !frontier start_node in
+  let rec_call = start_node 
+    |> Subproblem.of_node 0 (Name.of_string "recursion") 
+    |> CCOpt.get_exn
+    |> (fun sp -> sp.Subproblem.hole) 
+    |> Zipper.base_call in  
+
+  let start_node = Node.add_filter start_node rec_call in
+  
+  let start_nodes = [start_node] in
+  let _ = CCList.iter (fun n ->
+    frontier := Frontier.push weights !frontier n) start_nodes in
   let primitive_proposals = CCList.map Primitive.to_proposal benchmark.Iterative.signature in
   
   (* repeatedly pull nodes and check for satisfiability *)
@@ -167,7 +169,7 @@ let synthesize (bm : Iterative.benchmark) : unit =
       (* if not, and there's a wild binder, find all expansions *)
       else
         let root = node.Node.root <+ ("spec_" ^ (string_of_int !counter)) in
-        let subproblem = Subproblem.of_node (root <+ "w") node in
+        let subproblem = Subproblem.of_node 0 (root <+ "w") node |> CCOpt.get_exn in
       
         let _ = if more_print then print_endline ("  Goal: " ^ (Dtype.to_string subproblem.Subproblem.goal)) else () in
 
