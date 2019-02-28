@@ -12,6 +12,8 @@ let strategy = ref "fancy"
 let obligation = ref false
 let counting = ref false
 let sizing = ref false
+let template = ref false
+let holes = ref 0
 
 (* the references for the weights, a little overly verbose *)
 let p_weight_1 = ref 4
@@ -37,6 +39,8 @@ let spec_list = [
     ], " Sets weights for priority construction");
   ("-count", Arg.Set counting, " Enables counting of solutions explored");
   ("-size", Arg.Set sizing, " Enables size checking for programs and simplified constraints");
+  ("-template", Arg.Set template, " Enables templating for initial synthesis state generation");
+  ("-holes", Arg.Set_int holes, " Sets the holes to be used; Only valid when -template is set")
 ]
 
 (* populate the references - no anonymous functions *)
@@ -93,9 +97,6 @@ open CCOpt.Infix
 (* the infinite loop, in a function we can back out of *)
 let synthesize (bm : Iterative.benchmark) : unit =
 
-  (* generate start node and initialize frontier *)
-  let start_node = Iterative.to_node bm in
-
   (* process start node as much as possible *)
   let fix = Subproblem.lift 
     (Name.of_string "fix")
@@ -105,18 +106,16 @@ let synthesize (bm : Iterative.benchmark) : unit =
     Subproblem.Proposal.lambda in
   let rec get_args sp = (lambda sp >>= get_args) <+> (CCOpt.return sp) in
 
-  let start_node = start_node 
-    |> fix
-    >>= get_args
-    |> CCOpt.get_exn in
-
-  let rec_call = start_node 
-    |> Subproblem.of_node 0 (Name.of_string "recursion") 
-    |> CCOpt.get_exn
-    |> (fun sp -> sp.Subproblem.hole) 
-    |> Zipper.base_call in  
-
-  let start_node = Node.add_filter start_node rec_call in
+  (* generate start node and initialize frontier *)
+  let start_node = if !template then Iterative.template_to_node !holes bm
+    else
+      let initial = Iterative.to_node bm |> fix >>= get_args |> CCOpt.get_exn in
+      let rec_call = initial 
+        |> Subproblem.of_node 0 (Name.of_string "recursion")
+        |> CCOpt.get_exn
+        |> (fun sp -> sp.Subproblem.hole)
+        |> Zipper.base_call in
+      Node.add_filter initial rec_call in
   
   let start_nodes = [start_node] in
   let _ = CCList.iter (fun n ->

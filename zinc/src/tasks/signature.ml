@@ -50,7 +50,7 @@ module Basic = struct
       fun v -> let open Vterm.Alt in
         let f = var "cast_func" in
         let x = var "cast_var" in
-        let tm = fix f (match_nat v (nat 0) (x, app succ.source x)) in
+        let tm = fix f (Dtype.Base "ci") (match_nat v (nat 0) (Sensitivity.Zero, x, app succ.source x)) in
           Vterm.eval tm)
   }
 

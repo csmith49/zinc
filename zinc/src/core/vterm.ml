@@ -767,26 +767,34 @@ module Alt = struct
         | [] -> ConsList (Nil)
         | x :: xs -> ConsList (Cons (x, conslist xs))
 
-    let fix (v : t) (body : t) : t = match v with
+    let fix (v : t) (dt : Dtype.t) (body : t) : t = match v with
         | Var (Free n) -> 
-            let tag = {f_var = n; f_dt = Dtype.Base ""} in
+            let tag = {f_var = n; f_dt = dt} in
                 Fix (tag, abstract (N.of_one n) body)
         | _ -> v
 
-    let abs (v : t) (body : t) : t = match v with
+    let abs (v : t) (dt : Dtype.t) (body : t) : t = match v with
         | Var (Free n) -> 
-            let tag = {a_var = n; a_dt = Dtype.Base "test"} in
+            let tag = {a_var = n; a_dt = dt} in
                 Abs (tag, abstract (N.of_one n) body)
         | _ -> v
 
     let app (l : t) (r : t) : t = App (l, r)
     let (<!>) = app
 
-    let match_nat (e : t) (zero : t) (sp : t * t) : t = match sp with
-        | (Var (Free n), succ) ->
-            let tag = {n_var = n; n_sens = Sensitivity.Free (Name.of_string "i")} in
+    let match_nat (e : t) (zero : t) (sp : Sensitivity.t * t * t) : t = match sp with
+        | (sens, Var (Free n), succ) ->
+            let tag = {n_var = n; n_sens = sens} in
                 MatchNat (tag, e, zero, abstract (N.of_one n) succ)
         | _ -> e
+
+    let sample (v : t) (dt : Dtype.t) (dist : t) (usage : t) : t = match v with
+        | Var (Free n) ->
+            let tag = {d_var = n; d_dt = dt} in
+                LetDraw (tag, dist, abstract (N.of_one n) usage)
+        | _ -> v
+
+    let return (e : t) : t = Return e
 
     let row : (string * vterm) list -> t = fun ps ->
         let convert (k, v) = Pair (Discrete k, v) in
