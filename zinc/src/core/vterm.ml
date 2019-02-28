@@ -498,7 +498,11 @@ and format' (tm : t) (s : Name.Stream.t) : string * Name.Stream.t = match tm wit
         let r, s = format' r s in
             ("(" ^ l ^ ", " ^ r ^ ")", s)
     | Real f -> string_of_float f, s
-    | Bag ts -> "BAG", s
+    | Bag ts -> ts
+        |> CCList.map (fun tm -> format' tm s)
+        |> CCList.map fst
+        |> CCString.concat " ; "
+        |> fun bag -> "[" ^ bag ^ "]", s
     | Function (id, _) -> id, s
     | Fix (_, body) ->
         let x, s = Name.Stream.draw_fix s in
@@ -554,7 +558,7 @@ module Evaluation = struct
     
     let to_string : t -> string = function
         | Diverge -> "Diverge"
-        | Value tm -> to_string tm
+        | Value tm -> format tm
     
     let to_option : t -> vterm option = function
         | Diverge -> None
@@ -631,7 +635,7 @@ let rec eval : t -> Evaluation.t = function
             Function ("closure", closure) |> Evaluation.return
 
     (* function application has several options for success *)
-    | App (Function (_, f), arg) -> f arg >>= eval
+    | App (Function (name, f), arg) -> f arg >>= eval
     | App ((Fix (_, body) as fix), arg) ->
         let e = instantiate_one fix body in
         let tm = App (e, arg) in
@@ -786,6 +790,12 @@ module Alt = struct
         | (sens, Var (Free n), succ) ->
             let tag = {n_var = n; n_sens = sens} in
                 MatchNat (tag, e, zero, abstract (N.of_one n) succ)
+        | _ -> e
+
+    let match_cons (e : t) (nil : t) (sp : Dtype.t * Sensitivity.t * t * t * t) = match sp with
+        | (dt, sens, Var (Free x), Var (Free y), cons) ->
+            let tag = {c_hd = x; c_tl = y; c_sens = sens; c_dt = dt} in
+                MatchCons (tag, e, nil, abstract_two x y cons)
         | _ -> e
 
     let sample (v : t) (dt : Dtype.t) (dist : t) (usage : t) : t = match v with

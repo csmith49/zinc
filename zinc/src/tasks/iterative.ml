@@ -73,6 +73,13 @@ let check (solution : Vterm.t) (bm : benchmark) : bool =
             ans
     in CCList.for_all check_ex bm.examples
 
+(* utilities for all benchmarks *)
+let list_to_bag : float list -> Vterm.t = fun fs -> fs
+    |> CCList.map Vterm.Alt.real |> Vterm.Alt.bag
+let bag_to_list : Vterm.t -> float list option = function
+    | Vterm.Bag ts -> ts |> CCList.map Vterm.eval |> CCList.map Vterm.Evaluation.to_real |> CCOpt.sequence_l
+    | _ -> None
+
 (* writing types is muuuuch easier if we just import make *)
 open Make
 
@@ -210,13 +217,6 @@ module IDC = struct
     let sens = let open Sensitivity.Alt in
         two *! n *! eps
 
-    (* utilities for implementation *)
-    let list_to_bag : float list -> Vterm.t = fun fs -> fs
-        |> CCList.map Vterm.Alt.real |> Vterm.Alt.bag
-    let bag_to_list : Vterm.t -> float list option = function
-        | Vterm.Bag ts -> ts |> CCList.map Vterm.eval |> CCList.map Vterm.Evaluation.to_real |> CCOpt.sequence_l
-        | _ -> None
-
     let rec cross_product : float list -> float list -> float = fun ls -> fun rs -> match ls, rs with
         | l :: ls, r :: rs ->
             (l *. r) +. (cross_product ls rs)
@@ -251,15 +251,16 @@ module IDC = struct
 
     (* evaluating linear queries - they're one-sensitive, so easy type *)
     (* query -> db -o_1 real *)
-    let eval_q = {
-        Primitive.name = "eval_q";
-        dtype = query => (modal (one, db) -* real);
-        source = Vterm.Function ("eval_q", fun q ->
-            Vterm.Value (Vterm.Function ("eval_q q", fun db ->
-                match bag_to_list q, bag_to_list db with
-                    | Some q, Some db -> Vterm.Value (cross_product q db |> Vterm.Alt.real)
-                    | _ -> Vterm.Diverge
-            )));
+    let eval_noisy = {
+        Primitive.name = "eval_noisy";
+        dtype = query => (modal (eps, db) -* prob real);
+        source = Vterm.Function ("eval_noisy", fun query -> match Vterm.eval query with
+            | Vterm.Value query -> let query = query |> bag_to_list |> CCOpt.get_exn in 
+                Vterm.Value (Vterm.Function ("eval_noisy q", fun db -> match Vterm.eval db with
+                    | Vterm.Value db -> let db = db |> bag_to_list |> CCOpt.get_exn in
+                        Vterm.Value (cross_product query db |> Vterm.Alt.real)
+                    | _ -> Vterm.Diverge))
+            | _ -> Vterm.Diverge)
     }
 
     (* privacy distinguisher *)
@@ -267,21 +268,17 @@ module IDC = struct
     let pa = {
         Primitive.name = "pa";
         dtype = (bag query) => (approx_db => (modal (eps, db) -* (prob query)));
-        source = Vterm.Function ("pa", fun queries ->
-            Vterm.Value (Vterm.Function ("pa qs", fun approx ->
-                Vterm.Value (Vterm.Function ("pa qs a", fun db ->
-                    match Vterm.eval queries with
-                        | Vterm.Value (Vterm.Bag queries) -> begin
-                            match queries |> CCList.map bag_to_list |> CCOpt.sequence_l with
-                                | Some queries -> begin match bag_to_list approx, bag_to_list db with
-                                    | Some adb, Some db ->
-                                        Vterm.Value (select_query queries adb db |> list_to_bag)
-                                    | _ -> Vterm.Diverge
-                                end
-                                | _ -> Vterm.Diverge
-                            end
-                        | _ -> Vterm.Diverge
-                )))));
+        source = Vterm.Function ("pa", fun queries -> match Vterm.eval queries with
+            | Vterm.Value (Vterm.Bag queries) -> let queries = 
+                queries |> CCList.map bag_to_list |> CCOpt.sequence_l |> CCOpt.get_exn in
+                Vterm.Value (Vterm.Function ("pa q", fun approx -> match Vterm.eval approx with
+                    | Vterm.Value approx -> let approx = bag_to_list approx |> CCOpt.get_exn in
+                        Vterm.Value (Vterm.Function ("pa q approx", fun db -> match Vterm.eval db with
+                            | Vterm.Value db -> let db = bag_to_list db |> CCOpt.get_exn in
+                                Vterm.Value (select_query queries approx db |> list_to_bag)
+                            | _ -> Vterm.Diverge))
+                    | _ -> Vterm.Diverge))
+            | _ -> Vterm.Diverge)
     }
 
     (* database update algorithm *)
@@ -289,14 +286,16 @@ module IDC = struct
     let dua = {
         Primitive.name = "dua";
         dtype = approx_db => (query => (real => approx_db));
-        source = Vterm.Function ("dua", fun approx ->
-            Vterm.Value (Vterm.Function ("dua a", fun q ->
-                Vterm.Value (Vterm.Function ("dua a q", fun result ->
-                    match bag_to_list approx, bag_to_list q, Vterm.eval result with
-                        | Some adb, Some q, Vterm.Value (Vterm.Real r) ->
-                            Vterm.Value (update_adb adb q r |> list_to_bag)
-                        | _ -> Vterm.Diverge
-                )))));
+        source = Vterm.Function ("dua", fun approx -> match Vterm.eval approx with
+            | Vterm.Value approx -> let approx = approx |> bag_to_list |> CCOpt.get_exn in
+                Vterm.Value (Vterm.Function ("dua approx", fun query -> match Vterm.eval query with
+                    | Vterm.Value query -> let query = query |> bag_to_list |> CCOpt.get_exn in
+                        Vterm.Value (Vterm.Function ("dua approx query", fun r -> match Vterm.eval r with
+                            | Vterm.Value (Vterm.Real r) ->
+                                Vterm.Value (update_adb approx query r |> list_to_bag)
+                            | _ -> Vterm.Diverge))
+                    | _ -> Vterm.Diverge))
+            | _ -> Vterm.Diverge)
     }
 
     (* and a mechanism for adding noise *)
@@ -344,7 +343,7 @@ module IDC = struct
         let zero = return init_approx.source
         let draw_approx = f <!> n <!> qs <!> data
         let draw_q = pa.source <!> qs <!> approx <!> data
-        let draw_actual = add_noise.source <!> approx <!> q <!> data
+        let draw_actual = eval_noisy.source <!> q <!> data
         let result = return (dua.source <!> approx <!> q <!> actual)
 
         let template args = match args with
@@ -365,24 +364,19 @@ module IDC = struct
             make_hole "d_actual" (prob Make.real) draw_actual;
             make_hole "result" (prob approx_db) result;
         ]
+
+        let solution = template [zero; draw_approx; draw_q; draw_actual; result]
     end
 
     let q_1 = list_to_bag [1.0; 0.0; 0.0;]
     let q_2 = list_to_bag [0.0; 1.0; 0.0;]
     let q_3 = list_to_bag [0.0; 0.0; 1.0;]
-    let queries = Vterm.Bag [
-        q_1;
-        q_2;
-        q_3;
-    ]
+    let queries = Vterm.Bag [q_1; q_2; q_3;]
 
     let db_1 = list_to_bag [2.0; 1.0; 3.0]
 
     let result_0 = init_approx.source
-    let result_1 = update_adb [2.0; 1.0; 3.0] [0.0; 0.0; 1.0] 3.0
-    let result_2 = let q = select_query [
-        [1.0; 0.0; 0.0;] ; [0.0; 1.0; 0.0;] ; [0.0; 0.0; 1.0;]
-    ] result_1 [2.0; 1.0; 3.0] in update_adb result_1 q (cross_product result_1 [2.0; 1.0; 3.0])
+    let result_1 = update_adb [1.0; 1.0; 1.0] [0.0; 0.0; 1.0] 3.0
 
     let benchmark = {
         name = "idc";
@@ -391,7 +385,7 @@ module IDC = struct
             ([Vterm.Alt.nat 0 ; queries ; db_1], result_0);
             ([Vterm.Alt.nat 1 ; queries ; db_1], result_1 |> list_to_bag);
         ];
-        signature = [pa ; dua ; eval_q ; add_noise ; init_approx];
+        signature = [pa ; dua ; eval_noisy ; init_approx];
         template = Solution.template;
         holes = Solution.holes;
         recursion = {
@@ -413,73 +407,38 @@ module CDF = struct
     let bag_size = {
         Primitive.name = "bag_size";
         dtype = modal (one, bag real) -* real;
-        source = Vterm.Function ("bag_size", fun b -> match b with
-            | Vterm.Bag ts -> ts
+        source = Vterm.Function ("bag_size", fun b -> match Vterm.eval b with
+            | Vterm.Value (Vterm.Bag ts) -> ts
                 |> CCList.length
                 |> float_of_int
                 |> Vterm.Evaluation.of_real
-            | _ -> Vterm.Diverge        
+            | _ -> Vterm.Diverge
         )
     }
 
-    (* filter bag into parts via a predicate *)
-    let bag_split = {
-        Primitive.name = "bag_split";
-        dtype = (real => bool) => (modal (one, bag real) -* pair (bag real, bag real));
-        source = Vterm.Function ("bag_split", fun pred ->
-            Vterm.Value (Vterm.Function ("bag_split p", fun b -> match b with
-                | Vterm.Bag ts -> let rec split ts = begin match ts with
-                    | [] -> Vterm.Value (Vterm.Pair (Vterm.Bag [], Vterm.Bag []))
-                    | x :: xs -> begin match split xs with
-                        | Vterm.Value (Vterm.Pair (Vterm.Bag ls, Vterm.Bag rs)) ->
-                            if Vterm.App (pred, x) |> Vterm.eval |> Vterm.Evaluation.is_true then
-                                Vterm.Value (Vterm.Pair (Vterm.Bag (x :: ls), Vterm.Bag rs))
-                            else
-                                Vterm.Value (Vterm.Pair (Vterm.Bag ls, Vterm.Bag (x :: rs)))
-                        | _ -> Vterm.Diverge
-                        end
-                    end in split ts
-                | _ -> Vterm.Diverge
-            )))
+    (* take everything smaller than the real arg *)
+    let bag_lt = {
+        Primitive.name = "bag_lt";
+        dtype = real => (modal (one, bag real) -* bag real);
+        source = Vterm.Function ("bag_lt", fun threshold -> match Vterm.eval threshold with
+            | Vterm.Value (Vterm.Real t) ->
+                Vterm.Value (Vterm.Function ("bag_lt threshold", fun db -> match Vterm.eval db with
+                    | Vterm.Value db -> let db = db |> bag_to_list |> CCOpt.get_exn in
+                        Vterm.Value (db |> CCList.filter (fun x -> x < t) |> list_to_bag)
+                    | _ -> Vterm.Diverge))
+            | _ -> Vterm.Diverge)
     }
-    (* constructor for the relevant pred *)
-    let split_pred = {
-        Primitive.name = "split_pred";
-        dtype = real => (real => bool);
-        source = Vterm.Function ("split_pred", fun r ->
-            Vterm.Value (Vterm.Function ("split_pred r", fun x ->
-                Vterm.Evaluation.real_gt (Vterm.eval x) (Vterm.eval r) |> Vterm.Evaluation.of_bool
-            )))
-    }
-
-    let bag_split_lt = {
-        Primitive.name = "bag_split_lt";
-        dtype = real => (modal (one, bag real) -* pair (bag real, bag real));
-        source = Vterm.Function ("bag_split_lt", fun r ->
-            Vterm.Value (Vterm.Function ("bag_split_lt r", fun b ->
-                Vterm.App (bag_split.source, Vterm.App (split_pred.source, r)) |> Vterm.eval
-            )))
-    }
-
-    (* pair manipulation stuff *)
-    let p_fst = {
-        Primitive.name = "fst";
-        dtype = tbind (
-            a, modal (one, pair (a, a)) -* a
-        );
-        source = Vterm.Function ("fst", fun p -> match p with
-            | Vterm.Pair (tm, _) -> Vterm.Value tm
-            | _ -> Vterm.Diverge);
-    }
-    (* pair manipulation stuff *)
-    let p_snd = {
-        Primitive.name = "snd";
-        dtype = tbind (
-            a, modal (one, pair (a, a)) -* a
-        );
-        source = Vterm.Function ("snd", fun p -> match p with
-            | Vterm.Pair (_, tm) -> Vterm.Value tm
-            | _ -> Vterm.Diverge);
+    (* and everyting larger *)
+    let bag_geq= {
+        Primitive.name = "bag_geq";
+        dtype = real => (modal (one, bag real) -* bag real);
+        source = Vterm.Function ("bag_geq", fun threshold -> match Vterm.eval threshold with
+            | Vterm.Value (Vterm.Real t) ->
+                Vterm.Value (Vterm.Function ("bag_geq threshold", fun db -> match Vterm.eval db with
+                    | Vterm.Value db -> let db = db |> bag_to_list |> CCOpt.get_exn in
+                        Vterm.Value (db |> CCList.filter (fun x -> x >= t) |> list_to_bag)
+                    | _ -> Vterm.Diverge))
+            | _ -> Vterm.Diverge)
     }
 
     (* list manipulation *)
@@ -499,9 +458,74 @@ module CDF = struct
             )));
     }
 
+    (* and a mechanism for adding noise *)
+    (* real -*_e prob real *)
+    let add_noise = {
+        Primitive.name = "add_noise";
+        dtype = modal (eps, real) -* real;
+        source = Vterm.Function ("add_noise", fun v -> Vterm.Value v);
+    }
+
     (* overall sensitivity *)
-    let cdf_sens = let open Sensitivity.Alt in
-        k *! eps
+    let sens = let open Sensitivity.Alt in k *! eps
+
+    module Solution = struct
+        open Vterm.Alt
+
+        let f = var "f"
+        let f_dt = p_list (Make.real, k) => (modal (sens, Make.bag Make.real) -* prob (p_list (Make.real, k)))
+
+        let buckets = var "buckets"
+        let buckets_dt = p_list (Make.real, k)
+
+        let db = var "db"
+        let db_dt = Make.bag Make.real
+
+        let l = var "l"
+        let l_dt = Make.real
+
+        let ls = var "ls"
+        let ls_sens = Sensitivity.Free (Name.of_string "i")
+        let ls_dt = p_list (Make.real, ls_sens)
+
+        let count = var "count"
+        let count_dt = prob Make.real
+        
+        let bigger = var "bigger"
+        let bigger_dt = prob (p_list (Make.real, ls_sens))
+
+        let nil_branch = return nil.source
+        let draw_count = add_noise.source <!> (bag_size.source <!> (bag_lt.source <!> l <!> db))
+        let draw_bigger = f <!> ls <!> (bag_geq.source <!> l <!> db)
+        let return = cons.source <!> count <!> bigger
+
+        let template args = match args with
+            | nil_e :: count_e :: bigger_e :: return_e :: _ ->
+                fix f f_dt (abs buckets buckets_dt (abs db db_dt (
+                    match_cons buckets nil_e (Make.real, ls_sens, l, ls,
+                        sample count count_dt count_e (
+                            sample bigger bigger_dt bigger_e (
+                                return_e
+                            )
+                        )))))
+            | _ -> failwith "not enough args"
+
+        let holes = [
+            make_hole "nil" (prob (p_list (Make.real, k))) nil_branch;
+            make_hole "count" (prob Make.real) draw_count;
+            make_hole "bigger" (prob (p_list (Make.real, ls_sens))) draw_bigger;
+            make_hole "return" (prob (p_list (Make.real, k))) return;
+        ]
+
+        let recursion = {
+            Termination.Filter.base = [
+                Name.of_string "f"; Name.of_string "buckets"; Name.of_string "db"
+            ];
+            order = [Termination.LT (Name.of_string "ls", Name.of_string "buckets")]
+        }
+
+        let solution = template [nil_branch; draw_count; draw_bigger; return]
+    end
 
     (* example construction *)
     let db_1 = [
@@ -524,16 +548,19 @@ module CDF = struct
         1.0 ; 2.0
     ] |> CCList.map Vterm.Alt.real |> Vterm.Alt.conslist
 
-    (* let benchmark = {
+    let benchmark = {
         name = "cdf";
-        goal = p_list (real, k) => (modal (cdf_sens, bag real) -* prob (p_list (real, k)));
+        goal = p_list (real, k) => (modal (sens, bag real) -* prob (p_list (real, k)));
         examples = [
             ( [bucket_0 ; db_1], result_0 );
             ( [bucket_1 ; db_1], result_1 );
             ( [bucket_2 ; db_1], result_2 );
         ];
-        signature = [bag_size ; bag_split_lt ; p_fst ; p_snd ; nil ; cons ; IDC.add_noise];
-    } *)
+        signature = [bag_size ; bag_lt ; bag_geq ; nil ; cons ; add_noise];
+        template = Solution.template;
+        holes = Solution.holes;
+        recursion = Solution.recursion;
+    }
 end
 
-let all = [KMeans.benchmark ; IDC.benchmark]
+let all = [KMeans.benchmark ; IDC.benchmark ; CDF.benchmark]
