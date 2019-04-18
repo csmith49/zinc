@@ -229,7 +229,8 @@ try synthesize benchmark with
     let obs =
       node.Node.obligation |> Constraint.flatten
                            |> Simplify.simplify
-    in 
+    in
+    let _ = print_endline ("AhAHAHA " ^ (node.Node.obligation |> Constraint.to_list |> CCList.length |> string_of_int)) in
     let _ = if !obligation then Simplify.print_constraints obs else () in
     let _ = if !sizing then print_endline ("Solution size: " ^ (node.Node.solution |> Vterm.size |> string_of_int)) else () in
     let _ = if !sizing then print_endline ("Obligation size: " ^ (obs |> CCList.length |> string_of_int)) else ()
