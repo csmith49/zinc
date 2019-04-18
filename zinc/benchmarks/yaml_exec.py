@@ -19,7 +19,7 @@ def time_it(cmd, timeout, prefixes):
             shell=True, 
             timeout=timeout, 
             stdout=subprocess.PIPE,
-            universal_newlines=True).stdout.split("\n")
+            encoding="utf-8").stdout.split("\n")
         t = time.time() - start_time
         return t, split_output(output_lines, prefixes)
     except subprocess.TimeoutExpired as e:
